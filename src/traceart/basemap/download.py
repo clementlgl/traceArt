@@ -74,18 +74,27 @@ def download_to(
 
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with (
-            urllib.request.urlopen(request, timeout=timeout) as response,
-            tmp.open("wb") as fh,
-        ):
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            # Une page d'erreur ou de redirection Geofabrik répond en
+            # `text/html` avec un statut 200 — un chemin de région erroné
+            # se serait sinon écrit tel quel dans le cache, pour échouer
+            # bien plus tard et bien moins clairement, en plein import
+            # GDAL. Mieux vaut le détecter ici, avant même d'écrire un
+            # octet.
+            content_type = response.headers.get("Content-Type", "")
+            if "html" in content_type.lower():
+                raise DownloadError(
+                    f"{url} : réponse HTML inattendue (chemin de région incorrect ?)"
+                )
             total = int(response.headers.get("Content-Length") or 0)
             seen = 0
-            while chunk := response.read(CHUNK):
-                digest.update(chunk)
-                fh.write(chunk)
-                seen += len(chunk)
-                if on_progress:
-                    on_progress(seen, total)
+            with tmp.open("wb") as fh:
+                while chunk := response.read(CHUNK):
+                    digest.update(chunk)
+                    fh.write(chunk)
+                    seen += len(chunk)
+                    if on_progress:
+                        on_progress(seen, total)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         tmp.unlink(missing_ok=True)
         raise DownloadError(f"{url} : téléchargement impossible ({exc})") from exc

@@ -348,7 +348,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 357 tests, sans réseau
+uv run pytest        # 360 tests, sans réseau
 uv run ruff check src tests
 ```
 
