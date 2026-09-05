@@ -51,7 +51,7 @@
 {% if allow_fetch %}
 <form hx-post="/data/fetch/osm" hx-target="#job-area" hx-swap="innerHTML">
   <label for="osm-region">Région Geofabrik</label>
-  <input type="text" name="region" id="osm-region" placeholder="europe/france/languedoc-roussillon" required>
+  <input type="text" name="region" id="osm-region" placeholder="auvergne, ou europe/france/languedoc-roussillon" required>
   <label class="checkbox">
     <input type="checkbox" name="use_session_gpx" value="true" checked>
     Restreindre à l'emprise du GPX en cours

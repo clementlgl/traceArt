@@ -22,10 +22,12 @@ géométries.
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +42,19 @@ GEOFABRIK_BASE = "https://download.geofabrik.de"
 INDEX_NAME = "index.json"
 CONFIG_FILE = Path(__file__).resolve().parent / "osmconf.ini"
 DOWNLOAD_TIMEOUT_S = 600
+
+# Catalogue des régions publié par Geofabrik : 555 entrées, chacune avec
+# son identifiant, son nom et l'URL de son `.osm.pbf`. La variante
+# `-nogeom` pèse 0,5 Mo au lieu de 3,8 : les polygones ne serviraient
+# qu'à une recherche spatiale, dont la résolution par nom n'a pas besoin.
+GEOFABRIK_CATALOG_URL = f"{GEOFABRIK_BASE}/index-v1-nogeom.json"
+# Nom distinct de `INDEX_NAME`, qui désigne l'index des extraits déjà
+# importés localement — les deux vivent dans le même dossier.
+CATALOG_NAME = "geofabrik-catalog.json"
+# Le catalogue ne bouge qu'à la création ou la fusion d'une région :
+# inutile de retélécharger 0,5 Mo à chaque import.
+CATALOG_MAX_AGE_S = 30 * 24 * 3600
+CATALOG_TIMEOUT_S = 30
 
 # --------------------------------------------------------------------- rangs
 #
@@ -196,6 +211,40 @@ def geofabrik_url(region_path: str) -> str:
     if path.endswith(".osm.pbf"):
         return f"{GEOFABRIK_BASE}/{path}"
     return f"{GEOFABRIK_BASE}/{path}-latest.osm.pbf"
+
+
+@dataclass(frozen=True, slots=True)
+class GeofabrikRegion:
+    """Une région du catalogue Geofabrik, telle qu'elle est publiée."""
+
+    id: str
+    name: str
+    parent: str | None
+    pbf: str
+
+
+def parse_catalog(payload: dict) -> dict[str, GeofabrikRegion]:
+    """`index-v1-nogeom.json` → régions indexées par identifiant.
+
+    Les entrées sans URL `pbf` (Geofabrik en publie quelques-unes en
+    shapefile seul) sont écartées : proposer une région qu'on ne saurait
+    pas télécharger serait pire que ne pas la proposer.
+    """
+    out: dict[str, GeofabrikRegion] = {}
+    for feature in payload.get("features", []):
+        props = feature.get("properties") or {}
+        region_id = str(props.get("id") or "").strip()
+        pbf = str((props.get("urls") or {}).get("pbf") or "").strip()
+        if not region_id or not pbf:
+            continue
+        parent = props.get("parent")
+        out[region_id] = GeofabrikRegion(
+            id=region_id,
+            name=str(props.get("name") or region_id),
+            parent=str(parent) if parent else None,
+            pbf=pbf,
+        )
+    return out
 
 
 def _parse_population(values: np.ndarray, places: np.ndarray) -> np.ndarray:
@@ -376,9 +425,68 @@ class OsmStore:
             min(bounds[3] + pad, 90.0),
         )
 
+    # -------------------------------------------------------------- catalogue
+
+    @property
+    def catalog_path(self) -> Path:
+        return self.root / CATALOG_NAME
+
+    def catalog(self, *, refresh: bool = False) -> dict[str, GeofabrikRegion]:
+        """Catalogue Geofabrik, téléchargé une fois puis mis en cache."""
+        path = self.catalog_path
+        stale = not path.is_file() or (
+            time.time() - path.stat().st_mtime > CATALOG_MAX_AGE_S
+        )
+        if refresh or stale:
+            try:
+                download_to(GEOFABRIK_CATALOG_URL, path, timeout=CATALOG_TIMEOUT_S)
+            except DownloadError as exc:
+                # Un catalogue périmé vaut mieux qu'un échec : il ne bouge
+                # qu'à la création ou la fusion d'une région.
+                if not path.is_file():
+                    raise OsmError(
+                        f"catalogue Geofabrik indisponible ({exc}) — indique le "
+                        "chemin complet de la région, par exemple "
+                        "`europe/france/auvergne`"
+                    ) from exc
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise OsmError(f"{path} : catalogue Geofabrik illisible ({exc})") from exc
+        return parse_catalog(payload)
+
+    def resolve_pbf_url(self, region: str) -> str:
+        """Nom ou chemin de région → URL du `.osm.pbf`.
+
+        Un chemin explicite (`europe/france/auvergne`) est pris tel quel :
+        c'est l'usage documenté, et il fonctionne sans consulter le
+        catalogue. Un nom seul (`auvergne`, `Auvergne`) est résolu par le
+        catalogue Geofabrik — c'est ce que l'utilisateur tape
+        spontanément, et le construire à la main donnait une URL
+        inexistante, donc une page HTML téléchargée en silence.
+        """
+        wanted = region.strip().strip("/")
+        if not wanted:
+            raise OsmError("région Geofabrik vide")
+        if "/" in wanted or wanted.endswith(".osm.pbf"):
+            return geofabrik_url(wanted)
+
+        regions = self.catalog()
+        key = wanted.lower()
+        by_id = {region_id.lower(): entry for region_id, entry in regions.items()}
+        if key in by_id:
+            return by_id[key].pbf
+        by_name = {entry.name.lower(): entry for entry in regions.values()}
+        if key in by_name:
+            return by_name[key].pbf
+
+        near = difflib.get_close_matches(key, sorted(by_id), n=5)
+        hint = f" — proches : {', '.join(near)}" if near else ""
+        raise OsmError(f"région Geofabrik inconnue : {region!r}{hint}")
+
     def download(self, region_path: str, *, on_progress=None) -> tuple[Path, str]:
         """Télécharge un extrait Geofabrik. Renvoie (chemin, sha256)."""
-        url = geofabrik_url(region_path)
+        url = self.resolve_pbf_url(region_path)
         target = self.root / f"{slugify_region(region_path)}.osm.pbf"
         try:
             digest = download_to(

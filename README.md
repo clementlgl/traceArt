@@ -153,11 +153,20 @@ relais :
 
 ```bash
 uv run traceart data osm fetch europe/france/auvergne   # 155 Mo
+uv run traceart data osm fetch auvergne                 # nom seul : résolu via le catalogue Geofabrik
 uv run traceart data osm import ~/extraits/lozere.osm.pbf
 # gros extrait : découper à l'import est indispensable
 uv run traceart data osm fetch europe/alps --around ma-trace.gpx
 uv run traceart data osm import alps.osm.pbf --bbox 6.4,44.7,10.8,46.8
 ```
+
+Un chemin complet (`europe/france/auvergne`) est pris tel quel, sans
+réseau superflu. Un nom seul (`auvergne`) est résolu via le catalogue
+Geofabrik (`index-v1-nogeom.json`, mis en cache 30 jours) — un nom
+introuvable liste les plus proches plutôt que de laisser construire une
+URL invalide : Geofabrik y répond en 200 avec une page HTML, pas une
+erreur, ce qui se serait sinon écrit tel quel dans le cache pour échouer
+bien plus tard, en plein import GDAL.
 
 L'extrait est importé **une fois** en couches FlatGeobuf filtrées et
 indexées ; les rendus qui suivent sont aussi rapides que sur Natural
@@ -348,7 +357,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 360 tests, sans réseau
+uv run pytest        # 367 tests, sans réseau
 uv run ruff check src tests
 ```
 

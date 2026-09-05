@@ -7,11 +7,15 @@ sans télécharger 155 Mo ni dépendre du réseau.
 
 from __future__ import annotations
 
+import os
+import time
+
 import pytest
 
 from tests.conftest import _tier
 from traceart.basemap.osm import (
     ADMIN_RANKS,
+    CATALOG_MAX_AGE_S,
     OSM_LAYERS,
     PLACE_POPULATION,
     PLACE_RANKS,
@@ -158,6 +162,118 @@ def test_geofabrik_url_from_region_path():
     # Un chemin déjà complet est laissé tel quel.
     already_full = geofabrik_url("europe/france/auvergne-latest.osm.pbf")
     assert already_full.endswith("auvergne-latest.osm.pbf")
+
+
+CATALOG_PAYLOAD = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "properties": {
+                "id": "auvergne",
+                "parent": "france",
+                "name": "Auvergne",
+                "urls": {
+                    "pbf": "https://download.geofabrik.de/europe/france/auvergne-latest.osm.pbf"
+                },
+            }
+        },
+        {
+            "properties": {
+                "id": "rhone-alpes",
+                "parent": "france",
+                "name": "Rhône-Alpes",
+                "urls": {
+                    "pbf": "https://download.geofabrik.de/europe/france/rhone-alpes-latest.osm.pbf"
+                },
+            }
+        },
+        # Publiée en shapefile seul : inutilisable, donc écartée.
+        {
+            "properties": {
+                "id": "sans-pbf",
+                "parent": "france",
+                "name": "Sans PBF",
+                "urls": {"shp": "https://download.geofabrik.de/x-free.shp.zip"},
+            }
+        },
+    ],
+}
+
+
+@pytest.fixture
+def catalog_store(tmp_path):
+    """`OsmStore` avec un catalogue Geofabrik déjà en cache : la
+    résolution n'a alors aucune raison de toucher au réseau."""
+    import json
+
+    store = OsmStore(tmp_path / "cache")
+    store.root.mkdir(parents=True, exist_ok=True)
+    store.catalog_path.write_text(json.dumps(CATALOG_PAYLOAD), encoding="utf-8")
+    return store
+
+
+def test_catalog_skips_regions_without_a_pbf(catalog_store):
+    regions = catalog_store.catalog()
+    assert set(regions) == {"auvergne", "rhone-alpes"}
+
+
+def test_resolve_accepts_a_bare_region_name(catalog_store):
+    """Le cas qui échouait : `auvergne` seul construisait
+    `https://download.geofabrik.de/auvergne-latest.osm.pbf`, inexistant,
+    et Geofabrik répondait une page HTML en 200."""
+    assert catalog_store.resolve_pbf_url("auvergne") == (
+        "https://download.geofabrik.de/europe/france/auvergne-latest.osm.pbf"
+    )
+
+
+def test_resolve_is_case_insensitive_and_accepts_display_names(catalog_store):
+    assert catalog_store.resolve_pbf_url("AUVERGNE").endswith("auvergne-latest.osm.pbf")
+    assert catalog_store.resolve_pbf_url("Rhône-Alpes").endswith(
+        "rhone-alpes-latest.osm.pbf"
+    )
+
+
+def test_resolve_suggests_near_matches_on_a_typo(catalog_store):
+    with pytest.raises(OsmError, match="auvergne") as exc:
+        catalog_store.resolve_pbf_url("auvergnne")
+    assert "inconnue" in str(exc.value)
+
+
+def test_resolve_passes_an_explicit_path_through_without_the_catalog(tmp_path):
+    """Un chemin complet reste l'usage documenté, et doit fonctionner
+    sans catalogue en cache — donc sans réseau."""
+    store = OsmStore(tmp_path / "vide")
+    assert not store.catalog_path.exists()
+    assert store.resolve_pbf_url("europe/france/auvergne") == (
+        "https://download.geofabrik.de/europe/france/auvergne-latest.osm.pbf"
+    )
+
+
+def test_resolve_falls_back_on_a_stale_catalog(catalog_store, monkeypatch):
+    """Le catalogue ne bouge qu'à la création ou la fusion d'une région :
+    une copie périmée vaut mieux qu'un échec."""
+    from traceart.basemap.download import DownloadError
+
+    old = time.time() - CATALOG_MAX_AGE_S - 1
+    os.utime(catalog_store.catalog_path, (old, old))
+
+    def failing(*_args, **_kwargs):
+        raise DownloadError("réseau coupé (test)")
+
+    monkeypatch.setattr("traceart.basemap.osm.download_to", failing)
+    assert catalog_store.resolve_pbf_url("auvergne").endswith("auvergne-latest.osm.pbf")
+
+
+def test_resolve_reports_a_useful_error_without_catalog_nor_network(tmp_path, monkeypatch):
+    from traceart.basemap.download import DownloadError
+
+    def failing(*_args, **_kwargs):
+        raise DownloadError("réseau coupé (test)")
+
+    monkeypatch.setattr("traceart.basemap.osm.download_to", failing)
+    store = OsmStore(tmp_path / "vide")
+    with pytest.raises(OsmError, match="chemin complet"):
+        store.resolve_pbf_url("auvergne")
 
 
 def test_slugify_region():

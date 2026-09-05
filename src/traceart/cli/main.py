@@ -15,7 +15,7 @@ from rich.table import Table
 
 from traceart import __version__
 from traceart.basemap.catalog import AVAILABLE_LAYERS, CATALOG, datasets_for
-from traceart.basemap.osm import OsmError, OsmStore, geofabrik_url, slugify_region
+from traceart.basemap.osm import OsmError, OsmStore, slugify_region
 from traceart.basemap.store import Store, default_cache_dir
 from traceart.config import find_config, load_config
 from traceart.core.gpx import collect_gpx
@@ -553,7 +553,7 @@ def osm_fetch(region, bbox, around, keep_pbf, cache_dir) -> None:
     largement pour une trace de rando.
     """
     store = _osm_store(cache_dir)
-    url = geofabrik_url(region)
+    url = store.resolve_pbf_url(region)
     console.print(f"↓ [dim]{url}[/dim]")
 
     state = {"last": -1}
