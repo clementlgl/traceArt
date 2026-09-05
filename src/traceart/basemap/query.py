@@ -92,6 +92,12 @@ class BasemapResult:
     # (l'interface web, par exemple) devrait analyser la phrase de `note`
     # pour en extraire les noms de jeux — fragile et non contractuel.
     missing: tuple[str, ...] = ()
+    # Vrai si le palier justifie un extrait OSM (`OSM_SCALES`) et que
+    # `--osm` est actif, mais qu'aucun extrait importé ne couvre
+    # l'emprise — silencieux par conception (Natural Earth prend le
+    # relais), mais un appelant peut s'en servir pour proposer le
+    # téléchargement plutôt que de laisser l'absence passer inaperçue.
+    osm_missing: bool = False
 
     @property
     def source(self) -> str | None:

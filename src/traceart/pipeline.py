@@ -17,6 +17,7 @@ from pyproj import Transformer
 from traceart.basemap.catalog import DEFAULT_LAYERS
 from traceart.basemap.osm import OsmStore
 from traceart.basemap.query import (
+    OSM_SCALES,
     BasemapResult,
     build_basemap,
     osm_region_for,
@@ -176,6 +177,11 @@ class Result:
     # couche a été omise. Vide si tout était présent, ou si le fond a
     # été désactivé par choix (`--basemap off`).
     basemap_missing: tuple[str, ...] = ()
+    # Vrai si un extrait OSM aurait pu s'appliquer (palier 10m, `--osm`
+    # actif) mais qu'aucun n'importé ne couvre l'emprise. Le rendu s'est
+    # replié sur Natural Earth sans broncher ; un appelant peut s'en
+    # servir pour proposer le téléchargement.
+    osm_missing: bool = False
     # Noms de `extra_labels` tombés hors du cadre visible : pas dessinés
     # (aucun clip-path ne protège le SVG d'un texte égaré), mais signalés
     # pour que l'appelant puisse le dire à l'utilisateur.
@@ -269,6 +275,7 @@ def _empty_basemap(
     *,
     tier: Tier | None = None,
     missing: tuple[str, ...] = (),
+    osm_missing: bool = False,
 ) -> BasemapResult:
     """Fond vide, avec le message expliquant pourquoi le cas échéant.
 
@@ -278,7 +285,9 @@ def _empty_basemap(
     transmettre, sinon un futur bouton « télécharger » ne saurait pas
     quelle résolution proposer.
     """
-    return BasemapResult(layers={}, labels=[], tier=tier, note=note, missing=missing)
+    return BasemapResult(
+        layers={}, labels=[], tier=tier, note=note, missing=missing, osm_missing=osm_missing
+    )
 
 
 def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult:
@@ -303,6 +312,11 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
     bounds = visible_bounds_wgs84(layout, projector, bleed=opts.bleed)
     tier = choose_tier(bounds)
     region = osm_region_for(osm_store, bounds, tier)
+    # Le palier justifie un extrait OSM et `--osm` est actif, mais aucun
+    # extrait importé ne couvre l'emprise : silencieux pour le rendu
+    # (Natural Earth prend le relais), mais à signaler à l'appelant, qui
+    # peut proposer le téléchargement plutôt que de laisser passer.
+    osm_missing = opts.use_osm and tier.scale in OSM_SCALES and region is None
 
     # Vérification couche par couche. Globalement, un seul jeu manquant
     # emporterait tout le fond : demander `roads` sans `ne_10m_roads` en
@@ -342,7 +356,10 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
     if not usable:
         # Mode auto : on rend la trace seule plutôt que d'échouer.
         return _empty_basemap(
-            f"fond ignoré, rien en cache : {hint}", tier=tier, missing=missing_names
+            f"fond ignoré, rien en cache : {hint}",
+            tier=tier,
+            missing=missing_names,
+            osm_missing=osm_missing,
         )
 
     note = (
@@ -359,7 +376,7 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
         tier=tier,
         osm_store=osm_store,
     )
-    return replace(result, note=note, missing=missing_names)
+    return replace(result, note=note, missing=missing_names, osm_missing=osm_missing)
 
 
 def _resolve_extra_labels(
@@ -498,6 +515,7 @@ def run(
         basemap_note=basemap.note,
         basemap_source=basemap.source,
         basemap_missing=basemap.missing,
+        osm_missing=basemap.osm_missing,
     )
 
 

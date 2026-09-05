@@ -621,6 +621,45 @@ def test_on_mode_still_refuses_an_incomplete_cache(store, gpx_over_fixture):
     assert exc.value.layers == ("roads",)
 
 
+def test_osm_missing_flagged_when_no_extract_covers_the_frame(store, gpx_over_fixture):
+    """Aucun extrait OSM importé (le fixture `store` n'en pose aucun), au
+    palier local (10m) où OSM s'appliquerait : signalé, pour qu'un
+    appelant propose le téléchargement — le rendu se replie sur Natural
+    Earth sans lever d'erreur."""
+    from traceart.pipeline import Options, run
+
+    result = run([gpx_over_fixture], Options(cache_dir=store.root, layers=("water",)))
+    assert result.tier.scale == "10m"
+    assert result.osm_missing is True
+    assert result.basemap_source == "Natural Earth 10m"
+
+
+def test_osm_missing_false_when_osm_disabled(store, gpx_over_fixture):
+    from traceart.pipeline import Options, run
+
+    result = run(
+        [gpx_over_fixture],
+        Options(cache_dir=store.root, use_osm=False, layers=("water",)),
+    )
+    assert result.osm_missing is False
+
+
+def test_osm_missing_false_outside_osm_eligible_scales(store, tmp_path):
+    """Palier monde (110m) : OSM ne s'y applique jamais — rien à
+    proposer, même sans extrait importé."""
+    from tests.conftest import make_gpx, trkpt
+    from traceart.pipeline import Options, run
+
+    points = [(-60.0, -40.0), (60.0, 40.0)]
+    body = "<trk><trkseg>" + "".join(trkpt(lon, lat) for lon, lat in points) + "</trkseg></trk>"
+    path = tmp_path / "monde.gpx"
+    path.write_text(make_gpx(body), encoding="utf-8")
+
+    result = run([path], Options(cache_dir=store.root, layers=("water",)))
+    assert result.tier.scale != "10m"
+    assert result.osm_missing is False
+
+
 def test_all_layers_missing_falls_back_to_the_bare_trace(gpx_over_fixture, tmp_path):
     from traceart.pipeline import Options, run
 

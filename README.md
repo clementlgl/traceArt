@@ -199,6 +199,11 @@ visible, et seulement aux paliers 10m (région, local). Une couverture
 partielle dessinerait une moitié de carte en détail OSM et l'autre en
 Natural Earth grossier. `--no-osm` force Natural Earth.
 
+Aucun extrait ne couvre l'emprise à un palier où OSM s'appliquerait ?
+Le rendu se replie sur Natural Earth sans échouer (`Result.osm_missing`),
+et le CLI comme l'interface web le signalent — `traceart data osm fetch
+<région Geofabrik>`, ou le bouton dédié sur `/data`.
+
 **Notoriété synthétique.** À l'import, chaque entité reçoit un rang
 calqué sur le `scalerank` de Natural Earth — `motorway` 1, `primary` 4,
 `secondary` 7, `tertiary` 10 ; `river` 3, `canal` 6, `stream` 10 ; pays 1,
@@ -343,7 +348,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 352 tests, sans réseau
+uv run pytest        # 357 tests, sans réseau
 uv run ruff check src tests
 ```
 

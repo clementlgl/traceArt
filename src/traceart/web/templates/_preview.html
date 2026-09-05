@@ -33,6 +33,16 @@
 </div>
 {% endif %}
 
+{% if result.osm_missing %}
+<div class="notice">
+  <p>
+    Aucun extrait OpenStreetMap ne couvre cette zone — le fond utilise
+    Natural Earth, moins détaillé à cette échelle.
+  </p>
+  <a href="/data" hx-boost="true">Télécharger un extrait OSM →</a>
+</div>
+{% endif %}
+
 {% if result.dropped_labels %}
 <div class="notice">
   <p>

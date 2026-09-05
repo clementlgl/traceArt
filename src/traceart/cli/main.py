@@ -91,6 +91,12 @@ def _report_table(result: Result, out_paths: list[Path]) -> Table:
         table.add_row("fond", f"{result.tier.name} · {result.basemap_source}")
     if result.basemap_note:
         table.add_row("fond", f"[yellow]{result.basemap_note}[/yellow]")
+    if result.osm_missing:
+        table.add_row(
+            "fond",
+            "[yellow]aucun extrait OSM pour cette zone — "
+            "`traceart data osm fetch <région Geofabrik>` pour plus de détail[/yellow]",
+        )
     for path in out_paths:
         table.add_row("écrit", str(path))
     return table

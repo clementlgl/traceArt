@@ -212,6 +212,23 @@ def test_render_reports_basemap_source_when_cache_has_data(client):
     assert "Natural Earth" in r.text
 
 
+def test_render_proposes_osm_download_when_no_extract_covers_the_frame(client):
+    """Le fixture `store` ne pose aucun extrait OSM : au palier local
+    (10m), où OSM s'appliquerait, l'interface doit le signaler et
+    proposer le téléchargement plutôt que de se replier en silence."""
+    body = "<trk><trkseg>" + "".join(
+        trkpt(lon, lat) for lon, lat in ((3.2, 44.0), (3.5, 44.15), (3.8, 44.1))
+    ) + "</trkseg></trk>"
+    _upload(client, "cevennes.gpx", make_gpx(body))
+    r = client.post(
+        "/render",
+        data={"theme": "light", "basemap": "auto", "aspect": "trace", "layers": ["water"]},
+    )
+    assert r.status_code == 200
+    assert "extrait OpenStreetMap" in r.text
+    assert 'href="/data"' in r.text
+
+
 def test_render_reports_missing_data_on_empty_cache(empty_client):
     """Cache vide : le rendu réussit quand même (mode auto), avec un
     bandeau qui pointe vers /data plutôt qu'une erreur brute."""
