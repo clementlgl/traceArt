@@ -9,11 +9,13 @@ tolerance = 0.25        # Douglas-Peucker, en unités de viewBox (grand côté 1
 aspect = "trace"        # trace | a4 | a3 | a2 | square | story | wide | 16:9 | 0.707
 size = "420mm"          # grand côté du document ; en mm/cm/in le PNG suit --dpi
 out_dir = "posters"
+margin = 56.0           # marge, unités de viewBox ; absente, vient du thème (page.margin)
 basemap = "auto"        # auto (fond si cache rempli) | on (exige le cache) | off
 layers = ["water", "coastline", "rivers", "borders", "boundaries"]
                         # + roads, countries, labels
 bleed = true            # fond à fond perdu, ou contenu dans les marges
 osm = true              # utiliser les extraits OSM importés (Tier B)
+cache_dir = "~/.cache/traceart"   # absent, défaut $XDG_CACHE_HOME/traceart ou ~/.cache/traceart
 dpi = 300               # PNG, si `size` est une taille physique
 png_scale = 2.0         # PNG, si `size` est en pixels
 
