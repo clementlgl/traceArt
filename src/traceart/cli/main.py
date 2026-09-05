@@ -6,7 +6,6 @@ quand le premier argument est un chemin.
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -15,21 +14,21 @@ from rich.console import Console
 from rich.table import Table
 
 from traceart import __version__
-from traceart.basemap.catalog import AVAILABLE_LAYERS, CATALOG, DEFAULT_LAYERS, datasets_for
+from traceart.basemap.catalog import AVAILABLE_LAYERS, CATALOG, datasets_for
 from traceart.basemap.osm import OsmError, OsmStore, geofabrik_url, slugify_region
 from traceart.basemap.store import Store, default_cache_dir
-from traceart.cli.config import find_config, load_config, resolve
-from traceart.core.clean import CleanConfig
+from traceart.config import find_config, load_config
+from traceart.core.gpx import collect_gpx
 from traceart.errors import TraceArtError
+from traceart.layers import DEFAULT_LAYERS
+from traceart.options import build_options, build_output, parse_layers
 from traceart.pipeline import (
-    DEFAULT_TOLERANCE,
-    Options,
     PipelineError,
     Result,
     default_title,
-    parse_aspect,
     run,
     run_each,
+    slugify,
 )
 from traceart.render.png import svg_to_png, target_width_px
 from traceart.render.theme import available_themes, load_theme
@@ -52,52 +51,15 @@ def app() -> None:
 
 
 # --------------------------------------------------------------------- outils
+#
+# Implémentations déplacées vers des modules partagés (options.py,
+# pipeline.py, core/gpx.py) pour que l'interface web les réutilise sans
+# dépendre du CLI. Les alias ci-dessous gardent les noms historiques,
+# préfixés `_` par convention CLI.
 
-
-def _slugify(text: str) -> str:
-    slug = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
-    slug = re.sub(r"[\s_-]+", "-", slug)
-    return slug or "traceart"
-
-
-def _parse_layers(raw: object) -> tuple[str, ...]:
-    """`"water,rivers"` ou `["water", "rivers"]` → tuple validé."""
-    if raw is None:
-        return DEFAULT_LAYERS
-    if isinstance(raw, str):
-        names = [part.strip() for part in raw.split(",")]
-    elif isinstance(raw, (list, tuple)):
-        names = [str(part).strip() for part in raw]
-    else:
-        raise PipelineError(f"valeur de --layers invalide : {raw!r}")
-    names = [n for n in names if n]
-    if names == ["none"] or not names:
-        return ()
-    unknown = [n for n in names if n not in AVAILABLE_LAYERS]
-    if unknown:
-        raise PipelineError(
-            f"couche(s) inconnue(s) {unknown} (disponibles : {', '.join(AVAILABLE_LAYERS)})"
-        )
-    # dict.fromkeys : dédoublonne en gardant l'ordre demandé.
-    return tuple(dict.fromkeys(names))
-
-
-def _collect_gpx(inputs) -> list[Path]:
-    """Développe les dossiers en fichiers `.gpx` (récursif, ordre stable)."""
-    found: list[Path] = []
-    for raw in inputs:
-        item = Path(raw)
-        if item.is_dir():
-            found.extend(sorted(item.rglob("*.gpx")))
-        elif item.is_file():
-            found.append(item)
-        else:
-            raise PipelineError(f"chemin introuvable : {item}")
-    # dict.fromkeys : dédoublonne sans perdre l'ordre.
-    unique = list(dict.fromkeys(p.resolve() for p in found))
-    if not unique:
-        raise PipelineError("aucun fichier .gpx trouvé dans les chemins donnés")
-    return unique
+_slugify = slugify
+_parse_layers = parse_layers
+_collect_gpx = collect_gpx
 
 
 def _report_table(result: Result, out_paths: list[Path]) -> Table:
@@ -238,35 +200,42 @@ def render(
     """Rend un ou plusieurs GPX en carte SVG."""
     cfg = load_config(find_config(config))
 
-    clean_cfg = CleanConfig(
-        max_speed_kmh=float(resolve(cfg, "clean", "max_speed_kmh", max_speed, 300.0)),
-        pause_radius_m=float(resolve(cfg, "clean", "pause_radius_m", pause_radius, 12.0)),
-    )
-    options = Options(
-        theme=str(resolve(cfg, "defaults", "theme", theme, "light")),
-        projection=str(resolve(cfg, "defaults", "projection", projection, "auto")),
-        tolerance=float(resolve(cfg, "defaults", "tolerance", tolerance, DEFAULT_TOLERANCE)),
-        margin=resolve(cfg, "defaults", "margin", margin, None),
-        aspect=parse_aspect(resolve(cfg, "defaults", "aspect", aspect, None)),
-        size=str(resolve(cfg, "defaults", "size", size, "2000px")),
-        clean=clean_cfg,
-        title=title,
-        subtitle=subtitle,
-        show_stats=bool(resolve(cfg, "annotations", "stats", stats, True)),
-        show_profile=bool(resolve(cfg, "annotations", "profile", profile, False)),
-        show_annotations=bool(resolve(cfg, "annotations", "enabled", annotations, False)),
-        enable_clean=bool(resolve(cfg, "clean", "enabled", clean, True)),
-        basemap=str(resolve(cfg, "defaults", "basemap", basemap, "auto")),
-        layers=_parse_layers(resolve(cfg, "defaults", "layers", layers, None)),
-        bleed=bool(resolve(cfg, "defaults", "bleed", bleed, True)),
-        cache_dir=resolve(cfg, "defaults", "cache_dir", cache_dir, None),
-        use_osm=bool(resolve(cfg, "defaults", "osm", osm, True)),
-    )
+    # Un seul dict d'overrides, construit une fois : c'est lui que
+    # `traceart.options.build_options`/`build_output` confrontent à la
+    # config et aux défauts. Voir `traceart/options.py` — c'est le module
+    # qui remplace ce qui était ~30 lignes de `resolve(...)` codées en
+    # dur ici, et qu'une interface web aurait dû dupliquer à l'identique.
+    overrides = {
+        "theme": theme,
+        "projection": projection,
+        "tolerance": tolerance,
+        "margin": margin,
+        "aspect": aspect,
+        "size": size,
+        "title": title,
+        "subtitle": subtitle,
+        "show_stats": stats,
+        "show_profile": profile,
+        "show_annotations": annotations,
+        "enable_clean": clean,
+        "basemap": basemap,
+        "layers": layers,
+        "bleed": bleed,
+        "cache_dir": cache_dir,
+        "use_osm": osm,
+        "max_speed_kmh": max_speed,
+        "pause_radius_m": pause_radius,
+        "out_dir": out_dir,
+        "dpi": dpi,
+        "png_scale": png_scale,
+    }
+    options = build_options(cfg, overrides)
+    output = build_output(cfg, overrides)
 
-    files = _collect_gpx(inputs)
-    directory = Path(resolve(cfg, "defaults", "out_dir", out_dir, Path("out")))
-    dpi_value = int(resolve(cfg, "defaults", "dpi", dpi, 300))
-    scale_value = float(resolve(cfg, "defaults", "png_scale", png_scale, 1.0))
+    files = collect_gpx(inputs)
+    directory = output.out_dir
+    dpi_value = output.dpi
+    scale_value = output.png_scale
 
     if separate:
         if out is not None:
@@ -274,7 +243,7 @@ def render(
         for source, result in run_each(files, options):
             written = _write_outputs(
                 result,
-                directory / f"{_slugify(source.stem)}.svg",
+                directory / f"{slugify(source.stem)}.svg",
                 png=png,
                 size=options.size,
                 dpi=dpi_value,
@@ -288,7 +257,7 @@ def render(
     if out is not None:
         target = out
     else:
-        stem = _slugify(options.title or default_title(result.tracks))
+        stem = slugify(options.title or default_title(result.tracks))
         target = directory / f"{stem}.svg"
     written = _write_outputs(
         result, target, png=png, size=options.size, dpi=dpi_value, png_scale=scale_value

@@ -249,7 +249,7 @@ def test_positive_flag_overrides_a_false_in_config(flag, section, key):
     Le piège : déclarer l'option avec `default=True` rend « non passée »
     et « passée en positif » indiscernables, et le fichier gagnait.
     """
-    from traceart.cli.config import resolve
+    from traceart.config import resolve
 
     cfg = {section: {key: False}}
     assert resolve(cfg, section, key, True, True) is True

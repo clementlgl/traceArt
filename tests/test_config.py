@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from traceart.cli.config import ConfigError, find_config, load_config, resolve
+from traceart.config import ConfigError, find_config, load_config, resolve
 
 
 def test_project_config_wins_over_user(tmp_path):
@@ -12,7 +12,7 @@ def test_project_config_wins_over_user(tmp_path):
 
 
 def test_no_config_returns_none(tmp_path, monkeypatch):
-    monkeypatch.setattr("traceart.cli.config.USER_CONFIG", tmp_path / "absent.toml")
+    monkeypatch.setattr("traceart.config.USER_CONFIG", tmp_path / "absent.toml")
     assert find_config(cwd=tmp_path) is None
     assert load_config(None) == {}
 

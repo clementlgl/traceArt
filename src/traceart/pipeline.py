@@ -184,6 +184,19 @@ def _prettify(raw: str) -> str:
     return collapsed.title() if collapsed.isupper() or collapsed.islower() else collapsed
 
 
+def slugify(text: str) -> str:
+    """Nom de fichier sûr, dérivé d'un titre : espaces et diacritiques
+    conservés en NFC, tout le reste réduit à des tirets.
+
+    Partagé par le CLI (nom du SVG écrit) et par l'interface web (nom du
+    fichier proposé au téléchargement) — un seul endroit qui sait ce
+    qu'est un nom de fichier valide pour TraceArt.
+    """
+    slug = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
+    slug = re.sub(r"[\s_-]+", "-", slug)
+    return slug or "traceart"
+
+
 def _default_subtitle(stats: list[TrackStats]) -> str | None:
     from traceart.render.svg import _date_range
 

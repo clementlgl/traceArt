@@ -12,6 +12,7 @@ niveau sont ignorés : ce sont des POI, pas la trace.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
@@ -188,3 +189,27 @@ def parse_many(paths: list[str | Path], *, strict: bool = False) -> list[Track]:
         detail = " ; ".join(errors) if errors else "aucun fichier fourni"
         raise GpxError(f"aucune trace exploitable : {detail}")
     return tracks
+
+
+def collect_gpx(inputs: Iterable[str | Path]) -> list[Path]:
+    """Développe les dossiers en fichiers `.gpx` (récursif, ordre stable).
+
+    Partagé par le CLI (arguments de la ligne de commande) et par
+    l'interface web (chemins reconstitués depuis un lot d'upload) : les
+    deux doivent accepter indifféremment un fichier ou un dossier, et
+    refuser un lot qui ne contient aucune trace exploitable.
+    """
+    found: list[Path] = []
+    for raw in inputs:
+        item = Path(raw)
+        if item.is_dir():
+            found.extend(sorted(item.rglob("*.gpx")))
+        elif item.is_file():
+            found.append(item)
+        else:
+            raise GpxError(f"chemin introuvable : {item}")
+    # dict.fromkeys : dédoublonne sans perdre l'ordre.
+    unique = list(dict.fromkeys(p.resolve() for p in found))
+    if not unique:
+        raise GpxError("aucun fichier .gpx trouvé dans les chemins donnés")
+    return unique

@@ -1,11 +1,15 @@
 """Fichier de configuration `traceart.toml`.
 
-Précédence : options CLI > fichier de config > valeurs par défaut du code.
+Précédence : override explicite > fichier de config > défaut du code.
 La recherche s'arrête au premier fichier trouvé :
 
 1. le chemin donné à `--config` ;
 2. `./traceart.toml` (config par projet, versionnable) ;
 3. `~/.config/traceart/config.toml` (préférences utilisateur).
+
+Ce module vit à la racine du paquet, pas sous `cli/` : il ne connaît ni
+Click ni FastAPI, et sert de socle commun au CLI comme à l'interface web
+(voir `traceart.options`, qui construit `Options` par-dessus `resolve`).
 """
 
 from __future__ import annotations
