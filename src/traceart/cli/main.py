@@ -515,7 +515,9 @@ def _osm_import(
         slug=slug,
         sha256=sha256,
         bbox=bbox,
-        on_progress=lambda stage: console.print(f"  [dim]· {labels.get(stage, stage)}[/dim]"),
+        on_progress=lambda stage, _fraction: console.print(
+            f"  [dim]· {labels.get(stage, stage)}[/dim]"
+        ),
     )
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")

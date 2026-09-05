@@ -486,13 +486,19 @@ class OsmStore:
             counts: dict[str, int] = {}
             shutil.rmtree(self.region_dir(slug), ignore_errors=True)
 
-            for stage, handler in (
+            stages = (
                 ("lines", self._import_lines),
                 ("multipolygons", self._import_multipolygons),
                 ("points", self._import_points),
-            ):
+            )
+            for index, (stage, handler) in enumerate(stages):
                 if on_progress:
-                    on_progress(stage)
+                    # Pas de progression fine possible (le pilote OSM ne
+                    # rapporte rien pendant sa propre lecture) : la
+                    # fraction de palier reste le seul repère, mais c'est
+                    # déjà mieux qu'un message statique sur un import qui
+                    # peut prendre plusieurs dizaines de minutes.
+                    on_progress(stage, index / len(stages))
                 counts.update(handler(pbf, slug, bbox))
 
             bounds = self._union_bounds(slug, counts)

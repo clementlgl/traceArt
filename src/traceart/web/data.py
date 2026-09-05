@@ -142,14 +142,20 @@ def fetch_osm(
                 f"{seen / 1e6:.0f} / {total / 1e6:.0f} Mo" if total else f"{seen / 1e6:.0f} Mo",
             ),
         )
+        stage_labels = {
+            "lines": "cours d'eau et routes",
+            "multipolygons": "plans d'eau et limites",
+            "points": "labels de villes",
+        }
         try:
-            report(-1.0, "import : cours d'eau et routes")
             store.import_extract(
                 pbf,
                 slug=slugify_region(region),
                 sha256=digest,
                 bbox=bbox,
-                on_progress=lambda stage: report(-1.0, f"import : {stage}"),
+                on_progress=lambda stage, fraction: report(
+                    fraction, f"import : {stage_labels.get(stage, stage)}"
+                ),
             )
         finally:
             pbf.unlink(missing_ok=True)

@@ -131,6 +131,23 @@ def imported(tmp_path, extract):
     return store, region
 
 
+def test_import_reports_an_increasing_fraction_per_stage(tmp_path, extract):
+    """Sans repère fin dans le pilote OSM, la fraction de palier est le
+    seul indicateur possible pour une barre de progression — mais elle
+    doit au moins avancer, pas rester figée sur tout un import qui peut
+    prendre plusieurs dizaines de minutes."""
+    store = OsmStore(tmp_path / "cache")
+    calls: list[tuple[str, float]] = []
+    store.import_extract(
+        extract, slug="progress-test", on_progress=lambda s, f: calls.append((s, f))
+    )
+    assert [stage for stage, _ in calls] == ["lines", "multipolygons", "points"]
+    fractions = [f for _, f in calls]
+    assert fractions == sorted(fractions)
+    assert fractions[0] == 0.0
+    assert fractions[-1] < 1.0
+
+
 # ------------------------------------------------------------------ catalogue
 
 
