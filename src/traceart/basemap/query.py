@@ -10,6 +10,7 @@ millions de points à quelques centaines.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from traceart.basemap.store import Store, StoreError
 from traceart.basemap.tiers import Tier, choose_tier
 from traceart.core.project import Projector
 from traceart.errors import UnavailableError
-from traceart.render.label import COUNTRY, Label
+from traceart.render.label import COUNTRY, PARK, Label
 from traceart.render.layout import Layout
 
 # Marge de sécurité autour de la bounding box demandée, en fraction de
@@ -46,7 +47,11 @@ _MIN_LINE_EXTENT = 1.0
 # `borders`, `coastline` et `countries` en sont absents : la structure
 # de la carte reste sur Natural Earth, complet et généralisé, là où OSM
 # apporte le détail.
-OSM_REPLACES = frozenset({"rivers", "roads", "boundaries", "labels"})
+#
+# `parks` n'a aucun jeu Natural Earth à remplacer (pas de couche mondiale
+# équivalente) : c'est OSM seul ou rien, mais la mécanique est la même —
+# aucun jeu à combiner en dessous.
+OSM_REPLACES = frozenset({"rivers", "roads", "boundaries", "labels", "parks"})
 # Couches où OSM s'ajoute à Natural Earth. Seul l'océan survit dessous
 # (`Dataset.keep_under_osm`) : OSM n'a pas de polygone océan.
 OSM_ADDS_TO = frozenset({"water"})
@@ -69,6 +74,15 @@ _GEOM_COLLECTION = 7
 # Sans ce seuil, un pays qui ne mord que le coin de la carte reçoit un
 # label tassé contre le bord.
 _MIN_COUNTRY_SHARE = 0.03
+# Un parc n'a pas vocation à dominer la carte comme un pays : seuil bien
+# plus permissif, sinon la plupart resteraient sans nom.
+_MIN_PARK_SHARE = 0.003
+# Distance minimale entre deux labels de même nature (unités viewBox,
+# grand côté 1000) : les aires protégées s'emboîtent presque toujours
+# (cœur, zone tampon, réserve de biosphère...), avec des centroïdes de
+# part visible quasi confondus — sans ce filtre, leurs noms se
+# superposent en un fouillis illisible.
+_MIN_LABEL_SPACING = 60.0
 
 
 class BasemapError(UnavailableError):
@@ -443,6 +457,13 @@ def build_basemap(
         geoms = shapely.intersection(geoms, clip_box)
         if label_kind == "country":
             labels.extend(_country_labels(geoms, names, layout, clip_box))
+        elif label_kind == "park":
+            # Contrairement à `country` : un parc dessine bien son
+            # polygone (couche `parks`, comme l'eau), le nom n'est qu'un
+            # bonus posé par-dessus — pas de couche `parks` séparée pour
+            # le seul texte.
+            collected.extend(_to_viewbox_paths(geoms, layout, closed))
+            labels.extend(_park_labels(geoms, names, layout, clip_box))
         elif label_kind:
             labels.extend(_city_labels(geoms, names, populations, layout))
         else:
@@ -457,7 +478,7 @@ def build_basemap(
             place(
                 *_read_osm(osm_store, region, layer, bbox, tier),
                 closed=osm_layer.closed,
-                label_kind="city" if osm_layer.label_field else None,
+                label_kind=osm_layer.label_kind if osm_layer.label_field else None,
             )
 
         for dataset in _datasets_to_read(layer, tier, store, use_osm=use_osm):
@@ -578,20 +599,25 @@ def _city_labels(
     return [rows[i] for i in order]
 
 
-def _country_labels(
+def _area_labels(
     geoms: np.ndarray,
     names: list[str],
     layout: Layout,
     clip_box,
+    *,
+    kind: str,
+    min_share: float,
 ) -> list[Label]:
-    """Noms de pays, posés au centre de leur part visible.
+    """Noms posés au centre de leur part visible (pays, parcs...).
 
     Le centroïde du polygone entier tomberait souvent hors du cadre — le
     centre de la France est loin d'une trace alpine. On travaille donc sur
     l'intersection avec le cadre, déjà calculée en amont.
 
     Le tri est par surface visible décroissante, et stabilisé par le nom :
-    le pays qui domine la carte sort en premier.
+    l'entité qui domine la carte sort en premier. Deux emplacements trop
+    proches (aires protégées imbriquées, quasi toujours le cas) ne
+    gardent que le premier de ce tri — la plus grande part visible.
     """
     rows: list[Label] = []
     areas: list[float] = []
@@ -601,22 +627,37 @@ def _country_labels(
         if geom is None or geom.is_empty or index >= len(names):
             continue
         area = float(shapely.area(geom))
-        if area / frame_area < _MIN_COUNTRY_SHARE or not names[index]:
+        if area / frame_area < min_share or not names[index]:
             continue
         point = shapely.centroid(geom)
-        # Un pays découpé en deux lobes par le cadre peut avoir son
-        # centroïde hors des terres : on retombe sur un point garanti
+        # Un polygone découpé en deux lobes par le cadre peut avoir son
+        # centroïde hors de la forme : on retombe sur un point garanti
         # intérieur.
         if not shapely.contains(geom, point):
             point = shapely.point_on_surface(geom)
         placed = layout.apply(shapely.get_coordinates(point))
-        rows.append(
-            Label(float(placed[0, 0]), float(placed[0, 1]), names[index], kind=COUNTRY)
-        )
+        rows.append(Label(float(placed[0, 0]), float(placed[0, 1]), names[index], kind=kind))
         areas.append(area)
 
     order = sorted(range(len(rows)), key=lambda i: (-areas[i], rows[i].text))
-    return [rows[i] for i in order]
+    kept: list[Label] = []
+    for i in order:
+        candidate = rows[i]
+        too_close = any(
+            math.hypot(candidate.x - other.x, candidate.y - other.y) < _MIN_LABEL_SPACING
+            for other in kept
+        )
+        if not too_close:
+            kept.append(candidate)
+    return kept
+
+
+def _country_labels(geoms: np.ndarray, names: list[str], layout: Layout, clip_box) -> list[Label]:
+    return _area_labels(geoms, names, layout, clip_box, kind=COUNTRY, min_share=_MIN_COUNTRY_SHARE)
+
+
+def _park_labels(geoms: np.ndarray, names: list[str], layout: Layout, clip_box) -> list[Label]:
+    return _area_labels(geoms, names, layout, clip_box, kind=PARK, min_share=_MIN_PARK_SHARE)
 
 
 def suggest_cities(

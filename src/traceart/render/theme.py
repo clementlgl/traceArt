@@ -25,7 +25,7 @@ BASE_THEME = "light"
 
 
 # Style de texte par nature de label.
-LABEL_STYLES = {"city": "labels", "country": "countries"}
+LABEL_STYLES = {"city": "labels", "country": "countries", "park": "parks"}
 
 
 

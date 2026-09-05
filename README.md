@@ -193,6 +193,7 @@ Sur `europe/alps` (2,2 Go) découpé autour d'une traversée des Alpes :
 | `rivers`, `roads`, `boundaries`, `labels` | OSM remplace Natural Earth |
 | `water` | OSM **plus** l'océan Natural Earth |
 | `coastline`, `borders`, `countries` | Natural Earth |
+| `parks` | OSM seul — aucune couche Natural Earth équivalente |
 
 La règle : **la structure reste Natural Earth, OSM apporte le détail.**
 L'océan parce qu'OSM ne fournit aucun polygone océan, et la côte avec lui
@@ -218,6 +219,15 @@ résout tout seul la région Geofabrik qui couvre le GPX de la session via
 catalogue, la plus petite qui couvre entièrement gagne — même logique
 que pour un extrait déjà importé), sans que l'utilisateur ait à taper un
 chemin.
+
+**Parcs naturels (`parks`).** Aires protégées OSM —
+`boundary=national_park`/`protected_area`, `leisure=nature_reserve` —
+posées comme l'eau (couche filtre-libre, pas de rang) et nommées comme
+un pays : centrées sur leur part visible, en retrait. Les zones
+protégées s'emboîtent presque toujours (cœur, zone tampon, réserve de
+biosphère...) avec des centroïdes quasi confondus : seul le nom de la
+plus grande entité proche survit (`_MIN_LABEL_SPACING`), pour éviter un
+empilement de texte illisible.
 
 **Notoriété synthétique.** À l'import, chaque entité reçoit un rang
 calqué sur le `scalerank` de Natural Earth — `motorway` 1, `primary` 4,
@@ -363,7 +373,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 374 tests, sans réseau
+uv run pytest        # 379 tests, sans réseau
 uv run ruff check src tests
 ```
 

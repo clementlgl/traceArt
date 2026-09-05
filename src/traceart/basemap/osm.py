@@ -108,6 +108,13 @@ WATER_NATURAL = ("water",)
 WATER_LANDUSE = ("reservoir", "basin")
 WATER_WATERWAY = ("riverbank",)
 
+# Parcs naturels et aires protégées : aucune couche Natural Earth
+# équivalente, uniquement des relations OSM. `leisure=nature_reserve` en
+# est une pratique distincte de `boundary` (souvent posée seule, sans
+# tag `boundary` associé), d'où la colonne à part.
+PARK_BOUNDARY = ("national_park", "protected_area")
+PARK_LEISURE = ("nature_reserve",)
+
 
 class OsmError(UnavailableError):
     """Extrait OSM illisible, ou région introuvable dans le cache."""
@@ -126,6 +133,10 @@ class OsmLayer:
     # Rang plancher : `boundaries` écarte `admin_level=2` (rang 1), qui
     # relève de la couche `borders` — laquelle reste sur Natural Earth.
     rank_min: int = 0
+    # Style de label quand `label_field` est renseigné : "city" (défaut,
+    # pastille + texte à droite) ou "park" (centré sur la part visible,
+    # comme un nom de pays, mais plus discret).
+    label_kind: str = "city"
 
 
 OSM_LAYERS: tuple[OsmLayer, ...] = (
@@ -147,6 +158,16 @@ OSM_LAYERS: tuple[OsmLayer, ...] = (
     # bord d'un extrait régional, et son contour dessinerait un artefact
     # rectiligne le long de la coupe — très visible sur un poster.
     OsmLayer("boundaries", "multipolygons", closed=True, rank_min=3),
+    # Pas de rang non plus : comme l'eau, une surface se juge par son
+    # étendue visible, pas par une notoriété administrative.
+    OsmLayer(
+        "parks",
+        "multipolygons",
+        closed=True,
+        rank_field=None,
+        label_field="name",
+        label_kind="park",
+    ),
     OsmLayer(
         "labels",
         "points",
@@ -336,6 +357,8 @@ def multipolygons_where() -> str:
         f" OR landuse IN {_sql_in(WATER_LANDUSE)}"
         f" OR waterway IN {_sql_in(WATER_WATERWAY)}"
         f" OR (boundary = 'administrative' AND admin_level IN {_sql_in(ADMIN_RANKS)})"
+        f" OR boundary IN {_sql_in(PARK_BOUNDARY)}"
+        f" OR leisure IN {_sql_in(PARK_LEISURE)}"
     )
 
 
@@ -748,18 +771,20 @@ class OsmStore:
         meta, _fids, wkb, field_data = self._read_source(
             pbf,
             "multipolygons",
-            ["natural", "landuse", "waterway", "boundary", "admin_level", "name"],
+            ["natural", "landuse", "waterway", "boundary", "admin_level", "leisure", "name"],
             multipolygons_where(),
             bbox,
         )
         if wkb is None or len(wkb) == 0:
-            return {"water": 0, "boundaries": 0}
+            return {"water": 0, "boundaries": 0, "parks": 0}
 
         natural = _column(meta, field_data, "natural")
         landuse = _column(meta, field_data, "landuse")
         waterway = _column(meta, field_data, "waterway")
         boundary = _column(meta, field_data, "boundary")
         admin = _column(meta, field_data, "admin_level")
+        leisure = _column(meta, field_data, "leisure")
+        name = _column(meta, field_data, "name")
         count = len(wkb)
 
         water = np.fromiter(
@@ -780,6 +805,14 @@ class OsmStore:
             dtype=bool,
             count=count,
         )
+        parks = np.fromiter(
+            (
+                str(boundary[i]) in PARK_BOUNDARY or str(leisure[i]) in PARK_LEISURE
+                for i in range(count)
+            ),
+            dtype=bool,
+            count=count,
+        )
         return {
             "water": self._write_layer(
                 self.layer_path(slug, "water"), wkb[water], {}, "MultiPolygon"
@@ -789,6 +822,9 @@ class OsmStore:
                 wkb[limits],
                 {"rank": _rank_from(admin[limits], ADMIN_RANKS)},
                 "MultiPolygon",
+            ),
+            "parks": self._write_layer(
+                self.layer_path(slug, "parks"), wkb[parks], {"name": name[parks]}, "MultiPolygon"
             ),
         }
 

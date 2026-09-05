@@ -94,6 +94,18 @@ def extract(tmp_path):
     parts.append(_node(404, 3.95, 44.55, {"place": "hamlet", "name": "Écart"}))
     parts.append(_node(405, 3.55, 44.25, {"place": "city"}))  # sans nom
 
+    # Parc national et réserve naturelle : nœuds groupés ici, avec le
+    # reste — le pilote OSM de GDAL exige tous les nœuds avant les
+    # premiers `way`/`relation`, pas d'entrelacement.
+    for i, (lon, lat) in enumerate(
+        [(3.30, 44.05), (3.40, 44.05), (3.40, 44.15), (3.30, 44.15)]
+    ):
+        parts.append(_node(700 + i, lon, lat))
+    for i, (lon, lat) in enumerate(
+        [(3.45, 44.15), (3.50, 44.15), (3.50, 44.20), (3.45, 44.20)]
+    ):
+        parts.append(_node(710 + i, lon, lat))
+
     # Routes de chaque niveau.
     parts.append(_way(500, [100, 101, 102], {"highway": "motorway", "name": "A75"}))
     parts.append(_way(501, [102, 103, 104], {"highway": "primary", "name": "N88"}))
@@ -120,6 +132,21 @@ def extract(tmp_path):
             [("way", 530, "outer")],
             {"type": "boundary", "boundary": "administrative", "admin_level": "6"},
         )
+    )
+
+    # Parc national : way fermé directement tagué, comme la plupart des
+    # petites aires protégées OSM (pas de relation).
+    parts.append(
+        _way(
+            720,
+            [700, 701, 702, 703, 700],
+            {"boundary": "national_park", "name": "Parc des Cévennes"},
+        )
+    )
+    # Réserve naturelle : `leisure`, sans `boundary` associé — pratique
+    # distincte, doit être reconnue elle aussi.
+    parts.append(
+        _way(721, [710, 711, 712, 713, 710], {"leisure": "nature_reserve", "name": "Réserve"})
     )
     parts.append(FOOTER)
 
@@ -369,8 +396,16 @@ def test_no_coastline_layer():
 
 def test_import_produces_expected_layers(imported):
     _store, region = imported
-    assert set(region.counts) == {"water", "rivers", "roads", "boundaries", "labels"}
+    assert set(region.counts) == {"water", "rivers", "roads", "boundaries", "labels", "parks"}
     assert region.features > 0
+
+
+def test_parks_accepts_boundary_and_leisure_tags(imported):
+    """`boundary=national_park` (relation ou way fermé) et
+    `leisure=nature_reserve` (souvent posé seul, sans `boundary`) doivent
+    tous deux compter comme parc."""
+    _store, region = imported
+    assert region.counts["parks"] == 2
 
 
 def test_undrawable_tags_are_not_imported(imported):
@@ -543,6 +578,42 @@ def test_osm_replaces_the_richer_layers(both):
     result = _build(both)
     assert set(result.osm_layers) == {"water", "rivers", "roads", "boundaries", "labels"}
     assert result.osm_region == "cevennes-test"
+
+
+def test_parks_layer_drawn_from_osm(both):
+    """Aucun jeu Natural Earth pour `parks` : uniquement OSM, mais doit
+    tout de même se dessiner comme n'importe quelle autre couche OSM."""
+    result = _build(both, layers=("parks",))
+    assert "parks" in result.osm_layers
+    assert result.layers.get("parks")
+
+
+def test_park_name_reaches_the_rendered_svg(tmp_path, imported, store):
+    """Bout en bout jusqu'au SVG : `_render_labels` ignorait les labels
+    de nature `park` (seuls `country`/`city` étaient itérés), un texte
+    posé dans `BasemapResult.labels` mais jamais dessiné — aucun test
+    sur `build_basemap` seul ne l'aurait remarqué."""
+    from tests.conftest import TRACK, make_gpx, trkpt
+    from traceart.pipeline import Options, run
+
+    body = "<trk><trkseg>" + "".join(
+        trkpt(lon, lat) for lon, lat in TRACK.segments[0].coords
+    ) + "</trkseg></trk>"
+    path = tmp_path / "trace.gpx"
+    path.write_text(make_gpx(body), encoding="utf-8")
+
+    result = run([path], Options(cache_dir=store.root, layers=("parks",)))
+    assert "Parc des Cévennes" in result.svg
+
+
+def test_park_name_is_labelled(both):
+    """Contrairement à `country`, un parc dessine son polygone ET porte
+    un nom — les deux à la fois, pas l'un ou l'autre."""
+    from traceart.render.label import PARK
+
+    result = _build(both, layers=("parks",))
+    names = {label.text for label in result.labels if label.kind == PARK}
+    assert names == {"Parc des Cévennes", "Réserve"}
 
 
 def test_coastline_stays_natural_earth(both):

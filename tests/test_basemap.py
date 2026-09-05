@@ -513,6 +513,32 @@ def test_country_labels_sorted_by_visible_area(store, frame):
     assert result.labels[0].text == "Grandpays"
 
 
+def test_overlapping_area_labels_keep_only_the_largest(frame):
+    """Des aires protégées imbriquées (cœur, zone tampon, réserve de
+    biosphère...) ont des centroïdes de part visible quasi confondus —
+    sans filtre de proximité, leurs noms se superposent en un fouillis
+    illisible (constaté sur le Parc national des Cévennes réel)."""
+    import shapely
+
+    from traceart.basemap.query import _area_labels
+
+    projector, layout = frame
+    x0, y0, x1, y1 = layout.data_bounds
+    clip_box = shapely.box(x0, y0, x1, y1)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    half_w, half_h = (x1 - x0) / 2, (y1 - y0) / 2
+    # Concentriques, comme un cœur de parc dans sa zone tampon : mêmes
+    # centroïdes, tailles différentes.
+    outer = shapely.box(cx - half_w * 0.6, cy - half_h * 0.6, cx + half_w * 0.6, cy + half_h * 0.6)
+    inner = shapely.box(cx - half_w * 0.1, cy - half_h * 0.1, cx + half_w * 0.1, cy + half_h * 0.1)
+    geoms = np.array([outer, inner], dtype=object)
+
+    labels = _area_labels(
+        geoms, ["Grande zone", "Petite zone"], layout, clip_box, kind="park", min_share=0.0
+    )
+    assert [label.text for label in labels] == ["Grande zone"]
+
+
 def test_country_label_sits_inside_the_frame(store, frame):
     """Le centroïde du polygone entier tomberait souvent hors du cadre :
     le centre de la France est loin d'une trace alpine."""
@@ -759,11 +785,17 @@ def test_layer_registry_is_the_single_source_of_truth():
     `relief` traînait dans l'ordre de dessin et les quatre thèmes sans
     qu'aucun jeu ne l'alimente."""
     from traceart.basemap.catalog import AVAILABLE_LAYERS, CATALOG, DEFAULT_LAYERS
+    from traceart.basemap.query import OSM_ADDS_TO, OSM_REPLACES
     from traceart.layers import LAYER_LABELS, LAYER_ORDER
     from traceart.render.theme import load_theme
 
     catalog_layers = {d.layer for d in CATALOG}
-    assert catalog_layers == set(AVAILABLE_LAYERS), "jeu sans couche déclarée"
+    assert catalog_layers <= set(AVAILABLE_LAYERS), "jeu sans couche déclarée"
+    # Une couche déclarée mais absente du catalogue Natural Earth (`parks`,
+    # purement OSM) doit au moins être alimentable par un extrait — sinon
+    # rien ne la dessine jamais, une couche fantôme comme `relief` avant elle.
+    orphan = set(AVAILABLE_LAYERS) - catalog_layers
+    assert orphan <= (OSM_REPLACES | OSM_ADDS_TO), "couche sans aucune source de données"
     assert set(DEFAULT_LAYERS) <= set(AVAILABLE_LAYERS)
     assert set(LAYER_ORDER) <= set(AVAILABLE_LAYERS), "couche fantôme dans l'ordre"
     assert set(LAYER_LABELS) == set(AVAILABLE_LAYERS)

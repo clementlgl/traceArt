@@ -15,6 +15,10 @@ halo_color = "#0f3057"
 [trace.marker]
 radius = 4.0
 
+[layers.parks]
+fill = "#0f3d3a"
+color = "#7fbfae"
+
 [layers.water]
 fill = "#0c2747"
 

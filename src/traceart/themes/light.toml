@@ -30,6 +30,21 @@ radius = 5.0
 stroke = "auto"
 stroke_width = 2.0
 
+[layers.parks]
+fill = "#e2ead9"
+stroke = "none"
+width = 0.0
+opacity = 1.0
+# Nom de parc : posé comme un pays (centré, sans pastille), mais plus
+# discret — un parc ne structure pas la carte comme une frontière.
+color = "#7a9470"
+size = 12.5
+weight = 400
+letter_spacing = 1.6
+uppercase = false
+dot_radius = 0.0
+halo = 3.0
+
 [layers.water]
 fill = "#dde6ec"
 stroke = "none"

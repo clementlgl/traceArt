@@ -18,7 +18,7 @@ import numpy as np
 
 from traceart.core.model import Track
 from traceart.core.stats import TrackStats
-from traceart.render.label import CITY, COUNTRY, Label
+from traceart.render.label import CITY, COUNTRY, PARK, Label
 from traceart.render.layout import Layout
 from traceart.render.theme import LABEL_STYLES, LAYER_LABELS, LAYER_ORDER, Theme
 
@@ -218,7 +218,8 @@ def _render_labels(req: RenderRequest) -> list[str]:
 
     Un calque par nature de label : les noms de pays passent dessous, en
     capitales espacées et sans point de localisation — un pays n'est pas
-    un point ; les villes par-dessus, avec leur pastille.
+    un point ; les parcs ensuite, même convention mais plus discrets ;
+    les villes par-dessus, avec leur pastille.
 
     Deux `<text>` superposés plutôt que `paint-order="stroke"` : l'ordre
     de peinture n'est pas honoré par tous les rasteriseurs, alors qu'un
@@ -227,8 +228,12 @@ def _render_labels(req: RenderRequest) -> list[str]:
     if not req.labels:
         return []
     lines: list[str] = []
-    # Pays d'abord : ils servent de fond aux noms de villes.
-    for kind, title in ((COUNTRY, "Labels · pays"), (CITY, "Labels · villes")):
+    # Pays d'abord, puis parcs : ils servent de fond aux noms de villes.
+    for kind, title in (
+        (COUNTRY, "Labels · pays"),
+        (PARK, "Labels · parcs"),
+        (CITY, "Labels · villes"),
+    ):
         group = [label for label in req.labels if label.kind == kind]
         if group:
             lines.extend(_render_label_group(req.theme, group, kind, title))

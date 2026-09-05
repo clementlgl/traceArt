@@ -32,6 +32,13 @@ class LayerSpec:
 
 # L'ordre de la séquence est l'ordre de dessin, du fond vers l'avant.
 LAYERS: tuple[LayerSpec, ...] = (
+    # Posés en premier : un aplat de fond, jamais par-dessus l'eau ou les
+    # traits qui structurent la carte. Aucun jeu Natural Earth ne les
+    # fournit (pas de couche mondiale équivalente) — uniquement des
+    # extraits OSM (`boundary=national_park`/`protected_area`,
+    # `leisure=nature_reserve`), donc invisibles hors palier 10m avec
+    # extrait importé.
+    LayerSpec("parks", "parcs naturels", default=False),
     LayerSpec("water", "plans d'eau", default=True),
     LayerSpec("coastline", "côtes", default=True),
     LayerSpec("rivers", "cours d'eau", default=True),

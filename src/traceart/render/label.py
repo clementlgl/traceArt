@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 CITY = "city"
 COUNTRY = "country"
+PARK = "park"
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +20,8 @@ class Label:
 
     `kind` sélectionne le style : `city` pour une ville, `country` pour
     un nom de pays — conventionnellement plus grand, espacé et en
-    capitales.
+    capitales — et `park` pour un parc naturel, posé comme un pays (au
+    centre de sa part visible, sans pastille) mais plus discret.
     """
 
     x: float

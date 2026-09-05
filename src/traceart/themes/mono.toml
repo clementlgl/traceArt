@@ -14,6 +14,10 @@ halo = 8.0
 [trace.marker]
 radius = 4.5
 
+[layers.parks]
+fill = "#e0dccf"
+color = "#6f6a62"
+
 [layers.water]
 fill = "#e6e2d9"
 

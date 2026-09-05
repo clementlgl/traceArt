@@ -10,6 +10,10 @@ colors = ["#ff6b57", "#4fb8d9", "#e8b34a", "#7fc08a", "#b98ac9"]
 width = 3.2
 halo = 7.4
 
+[layers.parks]
+fill = "#1a241d"
+color = "#5f7a5f"
+
 [layers.water]
 fill = "#1b2228"
 
