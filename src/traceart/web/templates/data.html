@@ -9,12 +9,14 @@
 </head>
 <body>
   <header>
-    <h1><a href="/">TraceArt</a></h1>
+    <div>
+      <h1><a href="/">TraceArt</a></h1>
+      <p class="tagline">Données de fond</p>
+    </div>
+    <nav><a href="/" class="tool-link">← atelier</a></nav>
   </header>
   <main>
-    <section class="card">
-      {% include "_data_status.html" %}
-    </section>
+    {% include "_data_status.html" %}
   </main>
 </body>
 </html>

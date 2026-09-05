@@ -1,4 +1,4 @@
-<h2>{{ title }}</h2>
+<h2 class="preview-title">{{ title }}</h2>
 
 <img
   src="/artifact/{{ token }}.svg"
@@ -6,21 +6,31 @@
   class="preview-image"
 >
 
-<dl class="stats">
-  <dt>Distance</dt>
-  <dd>{{ "%.1f"|format(result.stats|sum(attribute="distance_km")) }} km</dd>
+<dl class="readouts">
+  <div>
+    <dt>Distance</dt>
+    <dd class="num">{{ "%.1f"|format(result.stats|sum(attribute="distance_km")) }} km</dd>
+  </div>
   {% set ascent = result.stats|sum(attribute="ascent_m") %}
   {% if ascent %}
-  <dt>Dénivelé +</dt>
-  <dd>{{ "%.0f"|format(ascent) }} m</dd>
+  <div>
+    <dt>Dénivelé +</dt>
+    <dd class="num">{{ "%.0f"|format(ascent) }} m</dd>
+  </div>
   {% endif %}
-  <dt>Points</dt>
-  <dd>{{ result.points_source }} → {{ result.points_rendered }}</dd>
-  <dt>Cadre</dt>
-  <dd>{{ "%.0f"|format(result.layout.width) }} × {{ "%.0f"|format(result.layout.height) }}</dd>
+  <div>
+    <dt>Points</dt>
+    <dd class="num">{{ result.points_source }} → {{ result.points_rendered }}</dd>
+  </div>
+  <div>
+    <dt>Cadre</dt>
+    <dd class="num">{{ "%.0f"|format(result.layout.width) }} × {{ "%.0f"|format(result.layout.height) }}</dd>
+  </div>
   {% if result.basemap_source %}
-  <dt>Fond</dt>
-  <dd>{{ result.basemap_source }}</dd>
+  <div>
+    <dt>Fond</dt>
+    <dd>{{ result.basemap_source }}</dd>
+  </div>
   {% endif %}
 </dl>
 

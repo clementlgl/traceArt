@@ -9,34 +9,29 @@
 </head>
 <body>
   <header>
-    <h1>TraceArt</h1>
-    <p class="tagline">GPX → carte dessinée minimaliste</p>
+    <div>
+      <h1><a href="/">TraceArt</a></h1>
+      <p class="tagline">GPX → carte dessinée minimaliste</p>
+    </div>
+    <nav><a href="/data" class="tool-link">⚙ données de fond</a></nav>
   </header>
 
   <main>
-    <section id="upload-section" class="card">
-      <h2>1. Trace GPS</h2>
-      <form
-        hx-post="/upload"
-        hx-target="#workspace"
-        hx-swap="innerHTML"
-        hx-encoding="multipart/form-data"
-      >
-        <input type="file" name="files" accept=".gpx" multiple required>
-        <button type="submit">Envoyer</button>
-      </form>
-    </section>
+    <div class="atelier">
+      <div class="rail" id="workspace">
+        {% include "_uploaded.html" if files else "_empty_workspace.html" %}
+      </div>
 
-    <div id="workspace">
-      {% include "_uploaded.html" if files else "_empty_workspace.html" %}
+      <div class="canvas">
+        <div class="canvas-frame" id="preview" aria-live="polite">
+          <p class="canvas-empty">Le poster apparaît ici, dès l'envoi d'un GPX.</p>
+        </div>
+      </div>
     </div>
-
-    <section id="preview" class="card" aria-live="polite"></section>
   </main>
 
   <footer>
-    <a href="/data">données de fond</a>
-    · <a href="https://github.com" rel="noopener">TraceArt</a>
+    <a href="https://github.com" rel="noopener">TraceArt</a>
     · HTMX sous licence <a href="https://unpkg.com/htmx.org/LICENSE" rel="noopener">0BSD</a>
   </footer>
 </body>

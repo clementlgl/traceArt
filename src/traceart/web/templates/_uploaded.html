@@ -1,16 +1,24 @@
-{% if files %}
-<p class="confirm">{{ files|length }} fichier(s) envoyé(s) : {{ files|join(", ") }}</p>
-{% endif %}
+<div class="step">
+  <h2><span class="step-no">1</span>Trace</h2>
+  {% if files %}
+  <ul class="file-chips">
+    {% for f in files %}
+    <li>{{ f }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% include "_upload_form.html" %}
+</div>
 
-<section class="card">
-  <h2>2. Villes à afficher</h2>
+<div class="step">
+  <h2><span class="step-no">2</span>Villes à afficher</h2>
   <p class="hint">
     Ajoute des noms de ville que le fond de carte n'afficherait pas de
     lui-même — une ville ajoutée ici apparaît toujours, quel que soit
     le niveau de zoom.
   </p>
 
-  <h3>Villes suggérées</h3>
+  <h3>Suggérées</h3>
   <div id="place-suggestions">
     {% include "_place_suggestions.html" %}
   </div>
@@ -21,22 +29,32 @@
   </form>
   <div id="place-results"></div>
 
-  <h3>Villes ajoutées</h3>
+  <h3>Ajoutées</h3>
   <div id="place-list">
     {% include "_place_list.html" %}
   </div>
-</section>
+</div>
 
-<section class="card">
-  <h2>3. Réglages</h2>
-  <form hx-post="/render" hx-target="#preview" hx-swap="innerHTML" hx-indicator="#rendering">
+<div class="step">
+  <h2><span class="step-no">3</span>Réglages</h2>
+  <form
+    hx-post="/render"
+    hx-target="#preview"
+    hx-swap="innerHTML"
+    hx-indicator="#rendering"
+    hx-trigger="load, submit"
+  >
     <div class="field">
-      <label for="theme">Thème</label>
-      <select name="theme" id="theme">
+      <label>Thème</label>
+      <div class="theme-picker" role="radiogroup" aria-label="Thème">
         {% for t in themes %}
-        <option value="{{ t.name }}" {{ "selected" if t.name == "light" }}>{{ t.label }}</option>
+        <label class="theme-swatch" data-theme="{{ t.name }}">
+          <input type="radio" name="theme" value="{{ t.name }}" {{ "checked" if t.name == "light" }}>
+          <span class="swatch-preview" aria-hidden="true"></span>
+          <span class="swatch-label">{{ t.label }}</span>
+        </label>
         {% endfor %}
-      </select>
+      </div>
     </div>
 
     <div class="field">
@@ -103,4 +121,4 @@
     <button type="submit">Rendre</button>
     <span id="rendering" class="htmx-indicator">rendu en cours…</span>
   </form>
-</section>
+</div>

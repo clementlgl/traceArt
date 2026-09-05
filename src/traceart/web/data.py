@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, Response
 
-from traceart.basemap.catalog import CATALOG
+from traceart.basemap.catalog import CATALOG, SCALES, Dataset
 from traceart.basemap.osm import OsmStore, slugify_region
 from traceart.basemap.store import Store
 from traceart.core.gpx import collect_gpx, parse_many
@@ -47,18 +47,36 @@ def _job_fragment(request: Request, job: Job) -> Response:
     )
 
 
+def _ne_summary(ne_status: list[tuple[Dataset, bool, int]]) -> list[dict[str, object]]:
+    """Un jeu par résolution, pas un par fichier — la table détaillée
+    (20+ lignes) restait juste, mais illisible d'un coup d'œil. Le
+    détail reste disponible, replié sous un `<details>`."""
+    by_scale = {scale: {"present": 0, "total": 0} for scale in SCALES}
+    for dataset, present, _features in ne_status:
+        row = by_scale.setdefault(dataset.scale, {"present": 0, "total": 0})
+        row["total"] += 1
+        if present:
+            row["present"] += 1
+    return [
+        {"scale": scale, "present": row["present"], "total": row["total"]}
+        for scale, row in by_scale.items()
+    ]
+
+
 @router.get("", response_class=HTMLResponse)
 def status(request: Request) -> Response:
     settings = _settings(request)
     ne_store = Store(settings.cache_dir)
     osm_store = OsmStore(settings.cache_dir)
+    ne_status = ne_store.status()
     return _templates(request).TemplateResponse(
         request,
         "data.html",
         {
             "request": request,
             "allow_fetch": settings.allow_fetch,
-            "ne_status": ne_store.status(),
+            "ne_status": ne_status,
+            "ne_summary": _ne_summary(ne_status),
             "ne_size": ne_store.total_size(),
             "osm_regions": osm_store.regions(),
             "osm_size": osm_store.total_size(),

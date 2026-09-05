@@ -1,0 +1,18 @@
+<form
+  hx-post="/upload"
+  hx-target="#workspace"
+  hx-swap="innerHTML"
+  hx-encoding="multipart/form-data"
+>
+  <label class="dropzone">
+    <input
+      type="file"
+      name="files"
+      accept=".gpx"
+      multiple
+      required
+      onchange="this.closest('form').requestSubmit()"
+    >
+    <span class="dropzone-hint">ou glisse un ou plusieurs .gpx ici</span>
+  </label>
+</form>
