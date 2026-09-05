@@ -19,7 +19,7 @@ from traceart.core.gpx import collect_gpx
 from traceart.errors import UserError
 from traceart.layers import LAYERS
 from traceart.options import build_options, ui_specs
-from traceart.pipeline import ASPECT_PRESETS, default_title, run
+from traceart.pipeline import ASPECT_PRESETS, Options, default_title, run, suggest_cities
 from traceart.render.png import svg_to_png_bytes
 from traceart.render.theme import available_themes, load_theme
 from traceart.web.geocode import GeocodeError, GeocodeResult, search_places
@@ -78,10 +78,13 @@ def index(request: Request) -> Response:
 
     files = _session_files(settings, session_id)
     place_list = read_labels(settings.work_dir, session_id)
+    suggestions = _suggested_cities(settings, session_id, files, place_list)
     response = request.app.state.templates.TemplateResponse(
         request,
         "index.html",
-        _template_context(request, files=files, place_list=place_list),
+        _template_context(
+            request, files=files, place_list=place_list, suggestions=suggestions
+        ),
     )
     if not request.cookies.get(_SESSION_COOKIE):
         response.set_cookie(
@@ -95,6 +98,31 @@ def _session_files(settings: WebSettings, session_id: str) -> list[str]:
     if not directory.is_dir():
         return []
     return sorted(p.name for p in directory.glob("*.gpx"))
+
+
+def _suggested_cities(
+    settings: WebSettings, session_id: str, filenames: list[str], place_list: list[GeocodeResult]
+) -> list[GeocodeResult]:
+    """Plus grosses villes du cadre, déjà ajoutées exclues.
+
+    Best-effort : une donnée locale absente ou corrompue ne doit pas
+    casser la page, seulement priver l'utilisateur de la suggestion.
+    """
+    if not filenames:
+        return []
+    directory = session_dir(settings.work_dir, session_id)
+    already = {p.name for p in place_list}
+    try:
+        found = suggest_cities(
+            [directory / name for name in filenames], Options(cache_dir=settings.cache_dir)
+        )
+    except Exception:
+        return []
+    return [
+        GeocodeResult(name=name, lat=lat, lon=lon)
+        for name, lon, lat in found
+        if name not in already
+    ]
 
 
 @router.post("/upload", response_class=HTMLResponse)
@@ -116,11 +144,13 @@ async def upload(request: Request, files: list[UploadFile]) -> Response:
     # compris) : une nouvelle trace change le contexte géographique,
     # repartir à zéro est délibéré, pas un oubli.
     place_list = read_labels(settings.work_dir, session_id)
+    filenames = [p.name for p in saved]
+    suggestions = _suggested_cities(settings, session_id, filenames, place_list)
     response = request.app.state.templates.TemplateResponse(
         request,
         "_uploaded.html",
         _template_context(
-            request, files=[p.name for p in saved], place_list=place_list
+            request, files=filenames, place_list=place_list, suggestions=suggestions
         ),
     )
     if not request.cookies.get(_SESSION_COOKIE):

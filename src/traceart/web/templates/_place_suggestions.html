@@ -1,0 +1,17 @@
+{% if suggestions %}
+<ul class="place-results">
+  {% for r in suggestions %}
+  <li>
+    <span>{{ r.name }}</span>
+    <form hx-post="/places/add" hx-target="#place-list" hx-swap="innerHTML">
+      <input type="hidden" name="name" value="{{ r.name }}">
+      <input type="hidden" name="lat" value="{{ r.lat }}">
+      <input type="hidden" name="lon" value="{{ r.lon }}">
+      <button type="submit">Ajouter</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="hint">Aucune suggestion pour cette trace.</p>
+{% endif %}

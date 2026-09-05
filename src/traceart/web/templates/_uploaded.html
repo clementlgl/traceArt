@@ -10,6 +10,11 @@
     le niveau de zoom.
   </p>
 
+  <h3>Villes suggérées</h3>
+  <div id="place-suggestions">
+    {% include "_place_suggestions.html" %}
+  </div>
+
   <form hx-get="/places/search" hx-target="#place-results" hx-swap="innerHTML" class="search-form">
     <input type="text" name="q" placeholder="Nom de lieu…" autocomplete="off" required>
     <button type="submit">Rechercher</button>

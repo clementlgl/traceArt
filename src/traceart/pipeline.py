@@ -23,6 +23,7 @@ from traceart.basemap.query import (
     planned_datasets,
     visible_bounds_wgs84,
 )
+from traceart.basemap.query import suggest_cities as _suggest_cities_in_bbox
 from traceart.basemap.store import Store, default_cache_dir, missing_datasets
 from traceart.basemap.tiers import Tier, choose_tier
 from traceart.core.clean import CleanConfig, CleanReport, clean_track
@@ -460,6 +461,11 @@ def run(
 
     basemap = _build_basemap(opts, layout, projector)
     custom_labels, dropped_labels = _resolve_extra_labels(extra_labels, projector, layout)
+    # Une ville ajoutée à la main peut aussi passer le filtre du palier
+    # automatique : sans ce filtre, elle serait dessinée deux fois au
+    # même endroit.
+    auto_names = {lbl.text for lbl in basemap.labels}
+    custom_labels = [lbl for lbl in custom_labels if lbl.text not in auto_names]
 
     placed = [layout_track(t, layout) for t in projected]
     simplified = [simplify_track(t, opts.tolerance) for t in placed]
@@ -493,6 +499,45 @@ def run(
         basemap_source=basemap.source,
         basemap_missing=basemap.missing,
     )
+
+
+def suggest_cities(
+    paths: list[str | Path], options: Options | None = None, *, limit: int = 8
+) -> list[tuple[str, float, float]]:
+    """Plus grosses villes visibles pour ce cadre, sans filtre de palier.
+
+    Ne fait que la moitié de `run()` (jusqu'à la mise en page) : pas
+    besoin de simplifier la trace ni de produire le SVG pour proposer
+    des ajouts manuels. Sert l'interface web (villes suggérées à
+    l'upload) — voir `basemap.query.suggest_cities` pour la lecture des
+    données locales.
+    """
+    opts = options or Options()
+    if not paths:
+        return []
+    tracks = parse_many(paths)
+    if opts.enable_clean:
+        tracks = [clean_track(t, opts.clean)[0] for t in tracks]
+        tracks = [t for t in tracks if not t.is_empty]
+    if not tracks:
+        return []
+
+    theme = load_theme(opts.theme)
+    projector = choose_projection(tracks, opts.projection)
+    projected = [_project(t, projector) for t in tracks]
+    margin = opts.margin if opts.margin is not None else theme.num("page.margin", 56.0)
+    layout = fit_layout(
+        combined_bounds(projected),
+        long_edge=theme.num("page.long_edge", 1000.0),
+        margin=margin,
+        aspect=opts.aspect,
+    )
+
+    bbox = visible_bounds_wgs84(layout, projector, bleed=opts.bleed)
+    tier = choose_tier(bbox)
+    store = Store(opts.cache_dir)
+    osm_store = OsmStore(opts.cache_dir or default_cache_dir()) if opts.use_osm else None
+    return _suggest_cities_in_bbox(bbox, tier, store=store, osm_store=osm_store, limit=limit)
 
 
 def run_each(

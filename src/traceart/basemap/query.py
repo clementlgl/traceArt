@@ -605,3 +605,73 @@ def _country_labels(
 
     order = sorted(range(len(rows)), key=lambda i: (-areas[i], rows[i].text))
     return [rows[i] for i in order]
+
+
+def suggest_cities(
+    bbox: tuple[float, float, float, float],
+    tier: Tier,
+    *,
+    store: Store,
+    osm_store: OsmStore | None = None,
+    limit: int = 8,
+) -> list[tuple[str, float, float]]:
+    """Plus grosses villes de l'emprise, sans filtre de rang/population.
+
+    Contrairement aux labels automatiques (filtrés par palier de zoom
+    pour ne pas surcharger la carte), cette fonction lit tout ce que les
+    données locales connaissent dans le cadre — pour proposer à
+    l'utilisateur des villes qu'un rendu automatique aurait pu écarter.
+    Coordonnées WGS84 en sortie : c'est la même forme qu'un résultat
+    Nominatim, réutilisable telle quelle par `web/geocode.py`.
+    """
+    candidates: dict[str, tuple[float, float, float]] = {}
+
+    def collect(geoms, names, populations) -> None:
+        for index, geom in enumerate(geoms):
+            if geom is None or geom.is_empty or index >= len(names) or not names[index]:
+                continue
+            coords = shapely.get_coordinates(geom)
+            if len(coords) == 0:
+                continue
+            lon, lat = float(coords[0, 0]), float(coords[0, 1])
+            pop = float(populations[index]) if populations is not None else 0.0
+            name = names[index]
+            if name not in candidates or candidates[name][2] < pop:
+                candidates[name] = (lon, lat, pop)
+
+    for dataset in datasets_for("labels", tier.scale):
+        if not dataset.label_field:
+            continue
+        path = store.layer_path(dataset)
+        if not path.is_file():
+            continue
+        collect(
+            *_read_features(
+                path,
+                bbox=bbox,
+                max_rank=10**6,
+                min_population=0,
+                rank_field=dataset.rank_field,
+                label_field=dataset.label_field,
+                label_fallback_field=dataset.label_fallback_field,
+                population_field=dataset.population_field,
+            )
+        )
+
+    region = _osm_region_for(osm_store, bbox, tier)
+    if region is not None and osm_store is not None and osm_store.has_layer(region.slug, "labels"):
+        layer = layer_by_name("labels")
+        collect(
+            *_read_features(
+                osm_store.layer_path(region.slug, "labels"),
+                bbox=bbox,
+                max_rank=10**6,
+                min_population=0,
+                rank_field=layer.rank_field,
+                label_field=layer.label_field,
+                population_field=layer.population_field,
+            )
+        )
+
+    ranked = sorted(candidates.items(), key=lambda kv: (-kv[1][2], kv[0]))
+    return [(name, lon, lat) for name, (lon, lat, _pop) in ranked[:limit]]

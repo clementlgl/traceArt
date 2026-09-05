@@ -442,6 +442,41 @@ def test_added_city_is_drawn_regardless_of_zoom_tier(client):
     assert "MonHameau" in svg
 
 
+# Mêmes points que `TRACK` dans conftest.py : le fixture `store` y pose
+# "Grandville" (500 000 hab.) et "Petitbourg" (3 000 hab., sous le seuil
+# du palier local — filtrée du fond automatique mais pas des suggestions).
+_CEVENNES_GPX = make_gpx(
+    "<trk><trkseg>"
+    + "".join(trkpt(lon, lat) for lon, lat in ((3.2, 44.0), (3.5, 44.3), (3.8, 44.1)))
+    + "</trkseg></trk>"
+)
+
+
+def test_suggested_cities_appear_after_upload(client):
+    r = _upload(client, "cevennes.gpx", _CEVENNES_GPX)
+    assert r.status_code == 200
+    assert "Grandville" in r.text
+    assert "Petitbourg" in r.text
+
+
+def test_suggested_city_already_added_is_not_repeated(client):
+    _upload(client, "cevennes.gpx", _CEVENNES_GPX)
+    client.post("/places/add", data={"name": "Grandville", "lat": 44.28, "lon": 3.5})
+    r = client.get("/")
+    assert r.status_code == 200
+    # Deux occurrences seulement : celles de la liste des villes ajoutées
+    # (texte affiché + valeur cachée du formulaire de suppression) — pas
+    # une troisième depuis le bloc de suggestions.
+    assert r.text.count("Grandville") == 2
+    assert "Petitbourg" in r.text  # celle-ci reste suggérée
+
+
+def test_no_suggestions_before_any_upload(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Aucune suggestion" not in r.text  # bloc de suggestions absent, pas vide
+
+
 def test_added_city_outside_the_frame_is_reported_not_drawn(client):
     _upload(client)
     client.post("/places/add", data={"name": "TropLoin", "lat": 10.0, "lon": 100.0})

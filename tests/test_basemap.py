@@ -12,7 +12,12 @@ import pytest
 
 from tests.conftest import TRACK, _tier
 from traceart.basemap.catalog import CATALOG, dataset_by_name, datasets_for
-from traceart.basemap.query import BasemapError, build_basemap, visible_bounds_wgs84
+from traceart.basemap.query import (
+    BasemapError,
+    build_basemap,
+    suggest_cities,
+    visible_bounds_wgs84,
+)
 from traceart.basemap.store import Entry, Store, StoreError, missing_datasets
 from traceart.basemap.tiers import choose_tier
 from traceart.core.project import choose_projection
@@ -193,6 +198,28 @@ def test_labels_filtered_by_population(store, frame):
     # Palier local : 15 000 habitants minimum. Petitbourg (3 000) tombe.
     assert result.tier.min_population == 15_000
     assert [lbl.text for lbl in result.labels] == ["Grandville"]
+
+
+def test_suggest_cities_bypasses_the_tier_population_floor(store, frame):
+    """Contrairement au fond automatique (`test_labels_filtered_by_
+    population`), les suggestions ignorent le seuil de population du
+    palier — c'est le but : proposer Petitbourg, que le palier local
+    (15 000 habitants minimum) écarterait sinon."""
+    projector, layout = frame
+    bbox = visible_bounds_wgs84(layout, projector)
+    tier = choose_tier(bbox)
+    names = [name for name, _lon, _lat in suggest_cities(bbox, tier, store=store)]
+    assert names == ["Grandville", "Petitbourg"]
+
+
+def test_suggest_cities_respects_the_limit(store, frame):
+    projector, layout = frame
+    bbox = visible_bounds_wgs84(layout, projector)
+    tier = choose_tier(bbox)
+    names = [
+        name for name, _lon, _lat in suggest_cities(bbox, tier, store=store, limit=1)
+    ]
+    assert names == ["Grandville"]
 
 
 def test_labels_sorted_by_population_descending(store, frame):

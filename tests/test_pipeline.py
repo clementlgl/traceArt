@@ -4,7 +4,7 @@ from xml.etree import ElementTree
 
 import pytest
 
-from tests.conftest import segment
+from tests.conftest import make_gpx, segment, trkpt
 from traceart.core.gpx import parse_gpx
 from traceart.core.model import Track
 from traceart.pipeline import (
@@ -14,9 +14,25 @@ from traceart.pipeline import (
     parse_aspect,
     run,
     run_each,
+    suggest_cities,
 )
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
+
+# Mêmes points que `TRACK` dans tests/conftest.py, dont dépend le
+# fixture `frame` : le cadre obtenu couvre bien "Grandville" (3.5,
+# 44.28) et "Petitbourg" (3.6, 44.05), posées par le fixture `store`.
+_CEVENNES_GPX = make_gpx(
+    "<trk><trkseg>"
+    + "".join(trkpt(lon, lat) for lon, lat in ((3.2, 44.0), (3.5, 44.3), (3.8, 44.1)))
+    + "</trkseg></trk>"
+)
+
+
+def _cevennes_gpx(tmp_path):
+    path = tmp_path / "cevennes.gpx"
+    path.write_text(_CEVENNES_GPX, encoding="utf-8")
+    return path
 
 
 def test_extra_labels_are_drawn_regardless_of_zoom_tier(gpx_file):
@@ -52,6 +68,34 @@ def test_extra_labels_default_is_a_no_op(gpx_file):
     explicit_empty = run([gpx_file], Options(basemap="off"), extra_labels=())
     assert with_default.svg == explicit_empty.svg
     assert with_default.dropped_labels == ()
+
+
+def test_extra_label_matching_an_auto_shown_city_is_not_duplicated(store, tmp_path):
+    """Une ville ajoutée à la main peut aussi passer le filtre du palier
+    automatique : sans déduplication, elle serait dessinée deux fois au
+    même endroit (halo doublé, texte superposé)."""
+    from traceart.layers import DEFAULT_LAYERS
+
+    gpx = _cevennes_gpx(tmp_path)
+    opts = Options(cache_dir=store.root, layers=(*DEFAULT_LAYERS, "labels"))
+    baseline = run([gpx], opts)
+    result = run([gpx], opts, extra_labels=[("Grandville", 3.5, 44.28)])
+    # Même compte qu'un rendu sans le label ajouté : sans déduplication,
+    # "Grandville" apparaîtrait une seconde fois (halo + remplissage).
+    assert result.svg.lower().count("grandville") == baseline.svg.lower().count("grandville")
+    assert baseline.svg.lower().count("grandville") > 0
+
+
+def test_suggest_cities_bypasses_the_tier_population_floor(store, tmp_path):
+    gpx = _cevennes_gpx(tmp_path)
+    names = [name for name, _lon, _lat in suggest_cities([gpx], Options(cache_dir=store.root))]
+    # Petitbourg (3 000 hab.) tombe sous le seuil du palier local
+    # (15 000) : une suggestion doit malgré tout la proposer.
+    assert names == ["Grandville", "Petitbourg"]
+
+
+def test_suggest_cities_on_no_paths_is_empty():
+    assert suggest_cities([]) == []
 
 
 def test_end_to_end_produces_valid_svg(gpx_file):

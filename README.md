@@ -294,6 +294,12 @@ aucun moment. Le CLI reste utilisable hors ligne via
 `--label "Nom:lon,lat"` (répétable, coordonnées explicites — pas de
 recherche par nom, pour ne pas casser l'usage hors ligne du CLI).
 
+**Villes suggérées.** Dès l'envoi du GPX, l'interface propose les plus
+grosses villes de l'emprise — données locales (Natural Earth / OSM),
+sans le filtre de rang/population du fond automatique, ni appel réseau :
+un simple clic les ajoute à la liste ci-dessus. Une ville déjà ajoutée ne
+réapparaît pas dans les suggestions.
+
 **`/data`** liste l'état du cache et propose de télécharger les données
 manquantes (Natural Earth comme les extraits OSM), avec une barre de
 progression qui s'interroge elle-même (`hx-trigger="every 1s"`, sans
@@ -337,7 +343,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 344 tests, sans réseau
+uv run pytest        # 352 tests, sans réseau
 uv run ruff check src tests
 ```
 
