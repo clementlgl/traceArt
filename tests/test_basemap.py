@@ -349,6 +349,18 @@ def test_basemap_never_reaches_the_annotation_band(store, tmp_path):
             assert coords[:, 1].max() <= bottom + 1e-6
 
 
+def test_bleed_reaches_the_bottom_edge_without_annotations(store, frame):
+    """Sans bandeau d'annotations, `margins.bottom` n'est qu'une marge de
+    page ordinaire — le bas doit bleeder comme les trois autres côtés,
+    pas s'arrêter net avant le bord de l'image."""
+    from traceart.basemap.query import frame_rect
+
+    _, layout = frame
+    assert layout.margins.bottom == layout.margins.top  # pas d'annotations
+    *_, bottom = frame_rect(layout, bleed=True)
+    assert bottom == layout.height
+
+
 def test_bleed_reaches_the_frame_edges(store, frame):
     from traceart.basemap.query import frame_rect
 

@@ -127,13 +127,19 @@ def _field_index(fields: np.ndarray, name: str | None) -> int | None:
 def frame_rect(layout: Layout, *, bleed: bool) -> tuple[float, float, float, float]:
     """Rectangle du fond en unités viewBox : (left, top, right, bottom).
 
-    Le bas s'arrête toujours au bandeau d'annotations, y compris à fond
-    perdu : sinon un plan d'eau se peint par-dessus le titre et le profil.
+    Le bas s'arrête au bandeau d'annotations quand il y en a un, y compris
+    à fond perdu : sinon un plan d'eau se peint par-dessus le titre et le
+    profil. Sans annotations, `margins.bottom` n'est qu'une marge de page
+    ordinaire, identique aux trois autres côtés : rien à protéger, le bas
+    doit alors bleeder comme eux — sinon le fond s'arrête net avant le
+    bord de l'image sur ce seul côté.
     Ce rectangle sert à la fois à calculer l'emprise à charger et à
     découper les géométries — les deux doivent coïncider exactement.
     """
     if bleed:
-        return 0.0, 0.0, layout.width, layout.height - layout.margins.bottom
+        annotation_band = layout.margins.bottom - layout.margins.top
+        bottom = layout.height - layout.margins.bottom if annotation_band > 0 else layout.height
+        return 0.0, 0.0, layout.width, bottom
     return (
         layout.margins.left,
         layout.margins.top,
