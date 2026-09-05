@@ -7,8 +7,12 @@ appellera `run` directement, sans passer par un sous-processus.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+import numpy as np
+from pyproj import Transformer
 
 from traceart.basemap.catalog import DEFAULT_LAYERS
 from traceart.basemap.osm import OsmStore
@@ -29,6 +33,7 @@ from traceart.core.project import project_track as _project
 from traceart.core.simplify import simplify_track
 from traceart.core.stats import TrackStats, compute_stats
 from traceart.errors import MissingDataError, UserError
+from traceart.render.label import CITY, Label
 from traceart.render.layout import Layout, combined_bounds, fit_layout, layout_track
 from traceart.render.svg import (
     Annotation,
@@ -91,6 +96,33 @@ def parse_aspect(value: str | None) -> float | None:
     return ratio
 
 
+def parse_label(value: str) -> tuple[str, float, float]:
+    """`"Nom:lon,lat"` → `(nom, lon, lat)`, pour `--label` en CLI.
+
+    Coordonnées explicites uniquement — pas de recherche par nom : le
+    CLI reste utilisable hors ligne. La recherche par nom (Nominatim)
+    est une commodité propre à l'interface web.
+    """
+    name, sep, coords = value.partition(":")
+    if not sep:
+        raise PipelineError(
+            f"label invalide : {value!r} (attendu \"Nom:lon,lat\")"
+        )
+    lon_text, comma, lat_text = coords.partition(",")
+    if not comma:
+        raise PipelineError(f"label invalide : {value!r} (attendu \"Nom:lon,lat\")")
+    try:
+        lon, lat = float(lon_text), float(lat_text)
+    except ValueError as exc:
+        raise PipelineError(f"coordonnées invalides dans {value!r}") from exc
+    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+        raise PipelineError(f"coordonnées hors plage dans {value!r}")
+    name = name.strip()
+    if not name:
+        raise PipelineError(f"label sans nom : {value!r}")
+    return name, lon, lat
+
+
 @dataclass(frozen=True, slots=True)
 class Options:
     theme: str = "light"
@@ -143,6 +175,10 @@ class Result:
     # couche a été omise. Vide si tout était présent, ou si le fond a
     # été désactivé par choix (`--basemap off`).
     basemap_missing: tuple[str, ...] = ()
+    # Noms de `extra_labels` tombés hors du cadre visible : pas dessinés
+    # (aucun clip-path ne protège le SVG d'un texte égaré), mais signalés
+    # pour que l'appelant puisse le dire à l'utilisateur.
+    dropped_labels: tuple[str, ...] = ()
 
     @property
     def points_source(self) -> int:
@@ -325,8 +361,50 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
     return replace(result, note=note, missing=missing_names)
 
 
-def run(paths: list[str | Path], options: Options | None = None) -> Result:
-    """Exécute le pipeline sur un ou plusieurs GPX rendus dans un même cadre."""
+def _resolve_extra_labels(
+    entries: Sequence[tuple[str, float, float]],
+    projector: Projector,
+    layout: Layout,
+) -> tuple[list[Label], tuple[str, ...]]:
+    """Convertit des (nom, lon, lat) en `Label` prêts à dessiner.
+
+    Ignore toujours le filtre de rang/population des labels automatiques
+    — c'est tout le sens de la fonctionnalité : l'utilisateur a demandé
+    ce nom précisément parce qu'il n'apparaîtrait pas de lui-même. En
+    revanche, un nom hors du cadre visible n'est pas dessiné : aucun
+    `clip-path` ne protège le SVG produit, un `<text>` égaré loin de la
+    trace ne serait pas juste inutile, il traînerait dans le document.
+    """
+    if not entries:
+        return [], ()
+
+    min_lon, min_lat, max_lon, max_lat = visible_bounds_wgs84(layout, projector)
+    transformer = Transformer.from_crs("EPSG:4326", projector.crs, always_xy=True)
+
+    labels: list[Label] = []
+    dropped: list[str] = []
+    for name, lon, lat in entries:
+        if not (min_lon <= lon <= max_lon and min_lat <= lat <= max_lat):
+            dropped.append(name)
+            continue
+        x, y = transformer.transform(lon, lat)
+        placed = layout.apply(np.asarray([[x, y]]))
+        labels.append(Label(float(placed[0, 0]), float(placed[0, 1]), name, kind=CITY))
+    return labels, tuple(dropped)
+
+
+def run(
+    paths: list[str | Path],
+    options: Options | None = None,
+    *,
+    extra_labels: Sequence[tuple[str, float, float]] = (),
+) -> Result:
+    """Exécute le pipeline sur un ou plusieurs GPX rendus dans un même cadre.
+
+    `extra_labels` : villes ajoutées manuellement, en `(nom, lon, lat)` —
+    dessinées quel que soit le palier de zoom, contrairement aux labels
+    automatiques du fond de carte (voir `_resolve_extra_labels`).
+    """
     opts = options or Options()
     if not paths:
         raise PipelineError("aucun fichier GPX fourni")
@@ -381,6 +459,7 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
     )
 
     basemap = _build_basemap(opts, layout, projector)
+    custom_labels, dropped_labels = _resolve_extra_labels(extra_labels, projector, layout)
 
     placed = [layout_track(t, layout) for t in projected]
     simplified = [simplify_track(t, opts.tolerance) for t in placed]
@@ -395,7 +474,7 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
         stats=stats,
         basemap=basemap.layers,
         annotation=annotation,
-        labels=basemap.labels,
+        labels=[*basemap.labels, *custom_labels],
     )
     svg = render_svg(request, size=opts.size)
 
@@ -408,6 +487,7 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
         theme=theme,
         projection=projector.definition,
         points_rendered=sum(t.n_points for t in drawable),
+        dropped_labels=dropped_labels,
         tier=basemap.tier,
         basemap_note=basemap.note,
         basemap_source=basemap.source,
@@ -415,11 +495,16 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
     )
 
 
-def run_each(paths: list[str | Path], options: Options | None = None) -> list[tuple[Path, Result]]:
+def run_each(
+    paths: list[str | Path],
+    options: Options | None = None,
+    *,
+    extra_labels: Sequence[tuple[str, float, float]] = (),
+) -> list[tuple[Path, Result]]:
     """Un rendu indépendant par fichier — cadrage propre à chaque trace."""
     opts = options or Options()
     # Le titre par défaut doit venir du fichier courant, pas du lot.
     return [
-        (Path(path), run([path], replace(opts, title=opts.title)))
+        (Path(path), run([path], replace(opts, title=opts.title), extra_labels=extra_labels))
         for path in sorted(paths, key=str)
     ]

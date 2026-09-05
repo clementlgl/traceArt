@@ -26,6 +26,7 @@ from traceart.pipeline import (
     PipelineError,
     Result,
     default_title,
+    parse_label,
     run,
     run_each,
     slugify,
@@ -171,6 +172,12 @@ def _write_outputs(
 @click.option("--dpi", type=int, help="DPI du PNG si --size est en mm/cm/in.")
 @click.option("--png-scale", type=float, help="Facteur du PNG si --size est en px.")
 @click.option("--config", type=PATH, help="Fichier traceart.toml explicite.")
+@click.option(
+    "--label",
+    "labels_raw",
+    multiple=True,
+    help='Ville à ajouter, coordonnées explicites : "Nom:lon,lat" (répétable).',
+)
 def render(
     inputs,
     out,
@@ -200,9 +207,11 @@ def render(
     dpi,
     png_scale,
     config,
+    labels_raw,
 ) -> None:
     """Rend un ou plusieurs GPX en carte SVG."""
     cfg = load_config(find_config(config))
+    extra_labels = [parse_label(raw) for raw in labels_raw]
 
     # Un seul dict d'overrides, construit une fois : c'est lui que
     # `traceart.options.build_options`/`build_output` confrontent à la
@@ -245,7 +254,7 @@ def render(
     if separate:
         if out is not None:
             raise PipelineError("-o est incompatible avec --separate ; utilise --out-dir")
-        for source, result in run_each(files, options):
+        for source, result in run_each(files, options, extra_labels=extra_labels):
             written = _write_outputs(
                 result,
                 directory / f"{slugify(source.stem)}.svg",
@@ -258,7 +267,7 @@ def render(
             console.print(_report_table(result, written))
         return
 
-    result = run(files, options)
+    result = run(files, options, extra_labels=extra_labels)
     if out is not None:
         target = out
     else:

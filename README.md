@@ -278,6 +278,22 @@ mode échoue net sur un cache incomplet, ce que l'interface ne doit
 jamais infliger à l'utilisateur ; le choix visible est
 « aucun / automatique ».
 
+**Villes ajoutées manuellement.** Un champ de recherche (Nominatim,
+OpenStreetMap) propose des lieux par nom ; chaque résultat s'ajoute à une
+liste, avec suppression individuelle. Contrairement aux labels
+automatiques du fond de carte, une ville ajoutée ici **s'affiche
+toujours**, quel que soit le palier de zoom qui l'aurait normalement
+filtrée — c'est tout le sens de la fonctionnalité. Une ville hors du
+cadre de la carte n'est pas dessinée (le SVG produit n'a pas de
+`clip-path`) mais est signalée dans l'aperçu. La liste vit le temps de
+la session, comme les GPX uploadés — un nouvel envoi la réinitialise.
+
+C'est la seule fonctionnalité du projet qui appelle un service réseau au
+moment de l'usage : le rendu lui-même (`pipeline.run`) n'en dépend à
+aucun moment. Le CLI reste utilisable hors ligne via
+`--label "Nom:lon,lat"` (répétable, coordonnées explicites — pas de
+recherche par nom, pour ne pas casser l'usage hors ligne du CLI).
+
 **`/data`** liste l'état du cache et propose de télécharger les données
 manquantes (Natural Earth comme les extraits OSM), avec une barre de
 progression qui s'interroge elle-même (`hx-trigger="every 1s"`, sans
@@ -321,7 +337,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 326 tests, sans réseau
+uv run pytest        # 344 tests, sans réseau
 uv run ruff check src tests
 ```
 

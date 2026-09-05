@@ -319,3 +319,137 @@ def test_boolean_form_flags_default_to_false_when_absent(client, flag_name):
     _upload(client)
     r = client.post("/render", data={"theme": "light", "aspect": "trace"})
     assert r.status_code == 200
+
+
+# --------------------------------------------------- recherche de villes
+
+
+def test_no_network_fixture_actually_blocks_the_real_search_call(client):
+    """Preuve, pas supposition : sans monkeypatch explicite dans le test,
+    une recherche doit échouer sur l'assertion du filet `no_network`
+    (conftest.py), pas partir sur le vrai réseau. `routes.py` importe
+    `search_places` par valeur — patcher seulement le module d'origine
+    laisserait ce filet inefficace, d'où le test."""
+    with pytest.raises(AssertionError, match="réseau"):
+        client.get("/places/search", params={"q": "lyon"})
+
+
+def _fake_results(*results):
+    """Résultats canés, jamais de vrai réseau — voir le filet `no_network`
+    (autouse) qui bloque `search_places` par défaut ; ces tests le
+    remplacent délibérément par une fonction déterministe."""
+
+    def fake(query, limit=8):
+        return list(results)
+
+    return fake
+
+
+def test_places_search_renders_results(client, monkeypatch):
+    from traceart.web.geocode import GeocodeResult
+
+    monkeypatch.setattr(
+        "traceart.web.routes.search_places",
+        _fake_results(GeocodeResult("Lyon", 45.75, 4.83)),
+    )
+    r = client.get("/places/search", params={"q": "lyon"})
+    assert r.status_code == 200
+    assert "Lyon" in r.text
+
+
+def test_places_search_empty_query_shows_no_results(client):
+    r = client.get("/places/search", params={"q": "   "})
+    assert r.status_code == 200
+    assert "Aucun résultat" not in r.text  # pas de recherche lancée du tout
+
+
+def test_places_search_no_match(client, monkeypatch):
+    monkeypatch.setattr("traceart.web.routes.search_places", _fake_results())
+    r = client.get("/places/search", params={"q": "xyzintrouvable"})
+    assert r.status_code == 200
+    assert "Aucun résultat" in r.text
+
+
+def test_places_search_service_unavailable_is_shown_inline(client, monkeypatch):
+    """Un service de géocodage en panne ne doit pas casser la page —
+    juste un message dans le fragment, pas une erreur HTTP générique
+    pour une simple recherche interactive."""
+    from traceart.web.geocode import GeocodeError
+
+    def failing(query, limit=8):
+        raise GeocodeError("Nominatim indisponible (test)")
+
+    monkeypatch.setattr("traceart.web.routes.search_places", failing)
+    r = client.get("/places/search", params={"q": "lyon"})
+    assert r.status_code == 200
+    assert "indisponible" in r.text
+
+
+def test_places_add_appears_in_the_list(client):
+    _upload(client)
+    r = client.post("/places/add", data={"name": "Lyon", "lat": 45.75, "lon": 4.83})
+    assert r.status_code == 200
+    assert "Lyon" in r.text
+    assert "Supprimer" in r.text
+
+
+def test_places_add_deduplicates_by_name(client):
+    _upload(client)
+    client.post("/places/add", data={"name": "Lyon", "lat": 45.75, "lon": 4.83})
+    r = client.post("/places/add", data={"name": "Lyon", "lat": 45.76, "lon": 4.84})
+    # "Lyon" apparaît deux fois par ville dans le fragment (le texte
+    # affiché + la valeur cachée du formulaire de suppression) : compter
+    # les boutons "Supprimer" donne le vrai nombre d'entrées.
+    assert r.text.count("Supprimer") == 1
+
+
+def test_places_remove_disappears_from_the_list(client):
+    _upload(client)
+    client.post("/places/add", data={"name": "Lyon", "lat": 45.75, "lon": 4.83})
+    r = client.post("/places/remove", data={"name": "Lyon"})
+    assert r.status_code == 200
+    assert "Lyon" not in r.text
+    assert "Aucune ville" in r.text
+
+
+def test_places_add_without_session_is_rejected(client):
+    r = client.post("/places/add", data={"name": "Lyon", "lat": 45.75, "lon": 4.83})
+    assert r.status_code == 422
+
+
+def test_new_upload_clears_the_previous_place_list(client):
+    """Une nouvelle trace change le contexte géographique : repartir à
+    zéro sur les villes ajoutées est délibéré, pas un oubli."""
+    _upload(client, "premier.gpx")
+    client.post("/places/add", data={"name": "Lyon", "lat": 45.75, "lon": 4.83})
+    r = _upload(client, "second.gpx")
+    assert "Lyon" not in r.text
+
+
+def test_added_city_is_drawn_regardless_of_zoom_tier(client):
+    """Le test le plus important du lot : une ville ajoutée manuellement
+    doit se retrouver dans le SVG produit, quel que soit le palier de
+    zoom qui l'aurait normalement filtrée."""
+    _upload(client)
+    # Coordonnée à l'intérieur du cadre de _SIMPLE_GPX (3.0-3.1 E, 44.0-44.1 N).
+    client.post("/places/add", data={"name": "MonHameau", "lat": 44.05, "lon": 3.05})
+    r = client.post(
+        "/render", data={"theme": "light", "basemap": "off", "aspect": "trace"}
+    )
+    assert r.status_code == 200
+    token = _artifact_token(r.text)
+    svg = client.get(f"/artifact/{token}.svg").text
+    assert "MonHameau" in svg
+
+
+def test_added_city_outside_the_frame_is_reported_not_drawn(client):
+    _upload(client)
+    client.post("/places/add", data={"name": "TropLoin", "lat": 10.0, "lon": 100.0})
+    r = client.post(
+        "/render", data={"theme": "light", "basemap": "off", "aspect": "trace"}
+    )
+    assert r.status_code == 200
+    assert "TropLoin" in r.text  # signalé dans la note...
+    token = _artifact_token(r.text)
+    svg = client.get(f"/artifact/{token}.svg").text
+    assert "TropLoin" not in svg  # ...mais pas dessiné

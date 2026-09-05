@@ -22,6 +22,8 @@ from traceart.options import build_options, ui_specs
 from traceart.pipeline import ASPECT_PRESETS, default_title, run
 from traceart.render.png import svg_to_png_bytes
 from traceart.render.theme import available_themes, load_theme
+from traceart.web.geocode import GeocodeError, GeocodeResult, search_places
+from traceart.web.labels import add_label, read_labels, remove_label
 from traceart.web.settings import WebSettings
 from traceart.web.uploads import (
     new_session_id,
@@ -75,8 +77,11 @@ def index(request: Request) -> Response:
     sweep_expired_sessions(settings.work_dir, ttl_s=settings.session_ttl_s)
 
     files = _session_files(settings, session_id)
+    place_list = read_labels(settings.work_dir, session_id)
     response = request.app.state.templates.TemplateResponse(
-        request, "index.html", _template_context(request, files=files)
+        request,
+        "index.html",
+        _template_context(request, files=files, place_list=place_list),
     )
     if not request.cookies.get(_SESSION_COOKIE):
         response.set_cookie(
@@ -106,16 +111,80 @@ async def upload(request: Request, files: list[UploadFile]) -> Response:
         for f in files:
             await f.close()
 
+    # Un nouvel upload efface la liste de villes de la session précédente
+    # (`save()` a déjà vidé tout le dossier de session, `_labels.json`
+    # compris) : une nouvelle trace change le contexte géographique,
+    # repartir à zéro est délibéré, pas un oubli.
+    place_list = read_labels(settings.work_dir, session_id)
     response = request.app.state.templates.TemplateResponse(
         request,
         "_uploaded.html",
-        _template_context(request, files=[p.name for p in saved]),
+        _template_context(
+            request, files=[p.name for p in saved], place_list=place_list
+        ),
     )
     if not request.cookies.get(_SESSION_COOKIE):
         response.set_cookie(
             _SESSION_COOKIE, session_id, max_age=int(settings.session_ttl_s), httponly=True
         )
     return response
+
+
+@router.get("/places/search", response_class=HTMLResponse)
+def places_search(request: Request, q: str = "") -> Response:
+    """Recherche Nominatim, déclenchée par un clic explicite (pas à
+    chaque frappe) — ce qui respecte la limite d'usage de l'instance
+    publique (~1 req/s) sans logique de throttling dédiée.
+
+    Ne remonte jamais d'erreur HTTP pour une recherche vide ou un
+    service momentanément indisponible : un message inline dans le
+    fragment est la bonne réponse à une interaction de recherche, pas
+    une page d'erreur.
+    """
+    query = q.strip()
+    results: list[GeocodeResult] = []
+    error: str | None = None
+    if query:
+        try:
+            results = search_places(query)
+        except GeocodeError as exc:
+            error = str(exc)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "_place_results.html",
+        {"request": request, "query": query, "results": results, "error": error},
+    )
+
+
+def _place_list_response(request: Request, entries: list[GeocodeResult]) -> Response:
+    return request.app.state.templates.TemplateResponse(
+        request, "_place_list.html", {"request": request, "place_list": entries}
+    )
+
+
+@router.post("/places/add", response_class=HTMLResponse)
+def places_add(
+    request: Request,
+    name: str = Form(...),
+    lat: float = Form(...),
+    lon: float = Form(...),
+) -> Response:
+    settings = _settings(request)
+    session_id = _session_id(request)
+    if not session_id:
+        raise UserError("session inconnue — recharge la page et renvoie ton GPX")
+    entries = add_label(settings.work_dir, session_id, GeocodeResult(name=name, lat=lat, lon=lon))
+    return _place_list_response(request, entries)
+
+
+@router.post("/places/remove", response_class=HTMLResponse)
+def places_remove(request: Request, name: str = Form(...)) -> Response:
+    settings = _settings(request)
+    session_id = _session_id(request)
+    if not session_id:
+        raise UserError("session inconnue — recharge la page et renvoie ton GPX")
+    entries = remove_label(settings.work_dir, session_id, name)
+    return _place_list_response(request, entries)
 
 
 @router.post("/render", response_class=HTMLResponse)
@@ -163,7 +232,11 @@ def render(
         "cache_dir": settings.cache_dir,
     }
     options = build_options({}, overrides)
-    result = run(gpx_paths, options)
+    extra_labels = [
+        (entry.name, entry.lon, entry.lat)
+        for entry in read_labels(settings.work_dir, session_id)
+    ]
+    result = run(gpx_paths, options, extra_labels=extra_labels)
 
     title_used = options.title or default_title(result.tracks)
     token = _store_artifact(settings, result.svg)

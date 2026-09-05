@@ -236,6 +236,16 @@ def no_network(monkeypatch):
         raise AssertionError("appel réseau tenté pendant les tests")
 
     monkeypatch.setattr("traceart.basemap.download.download_to", _forbidden)
+    # La recherche de lieux (Nominatim) n'utilise pas `download_to` — un
+    # appel `urllib.request` qui lui est propre. `web/routes.py` fait
+    # `from traceart.web.geocode import search_places` (import par
+    # valeur) : patcher seulement `web.geocode.search_places` laisserait
+    # la référence que la route appelle réellement intacte. Les deux
+    # noms sont donc patchés — celui que le code appelle, et le point
+    # d'origine, en défense en profondeur si un futur module importe la
+    # fonction directement lui aussi.
+    monkeypatch.setattr("traceart.web.geocode.search_places", _forbidden)
+    monkeypatch.setattr("traceart.web.routes.search_places", _forbidden)
 
 
 @pytest.fixture

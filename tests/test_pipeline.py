@@ -19,6 +19,41 @@ from traceart.pipeline import (
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+def test_extra_labels_are_drawn_regardless_of_zoom_tier(gpx_file):
+    """Une ville ajoutée manuellement ignore toujours le filtre de
+    rang/population des labels automatiques — c'est tout le sens de la
+    fonctionnalité : l'utilisateur la demande précisément parce qu'elle
+    n'apparaîtrait pas d'elle-même."""
+    result = run(
+        [gpx_file],
+        Options(basemap="off"),
+        extra_labels=[("MonHameau", 3.04, 44.03)],
+    )
+    assert "MonHameau" in result.svg
+    assert result.dropped_labels == ()
+
+
+def test_extra_labels_outside_the_frame_are_reported(gpx_file):
+    """Aucun clip-path ne protège le SVG produit : un nom hors cadre ne
+    doit pas se retrouver dans le document, juste signalé."""
+    result = run(
+        [gpx_file],
+        Options(basemap="off"),
+        extra_labels=[("TropLoin", 140.0, 44.03)],
+    )
+    assert "TropLoin" not in result.svg
+    assert result.dropped_labels == ("TropLoin",)
+
+
+def test_extra_labels_default_is_a_no_op(gpx_file):
+    """`extra_labels=()` (défaut) ne doit rien changer à un rendu
+    existant — zéro risque de régression pour tout appelant actuel."""
+    with_default = run([gpx_file], Options(basemap="off"))
+    explicit_empty = run([gpx_file], Options(basemap="off"), extra_labels=())
+    assert with_default.svg == explicit_empty.svg
+    assert with_default.dropped_labels == ()
+
+
 def test_end_to_end_produces_valid_svg(gpx_file):
     result = run([gpx_file])
     assert ElementTree.fromstring(result.svg).tag == f"{SVG_NS}svg"

@@ -114,3 +114,43 @@ footer { color: var(--muted); font-size: 0.85rem; }
 footer a { color: inherit; }
 
 code { background: #f0ece2; padding: 0.1em 0.3em; border-radius: 3px; }
+
+.search-form { display: flex; gap: 0.5rem; margin: 0.5rem 0 0.75rem; }
+.search-form input[type="text"] {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.place-results, .place-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+.place-results li, .place-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.place-results li:last-child, .place-list li:last-child { border-bottom: none; }
+.place-results form, .place-list form { margin: 0; }
+.place-results button {
+  background: none;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.85rem;
+}
+.place-list button.remove {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.85rem;
+}
+.place-list button.remove:hover { color: #a5372c; border-color: #a5372c; }

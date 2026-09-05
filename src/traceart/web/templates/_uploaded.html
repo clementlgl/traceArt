@@ -3,7 +3,27 @@
 {% endif %}
 
 <section class="card">
-  <h2>2. Réglages</h2>
+  <h2>2. Villes à afficher</h2>
+  <p class="hint">
+    Ajoute des noms de ville que le fond de carte n'afficherait pas de
+    lui-même — une ville ajoutée ici apparaît toujours, quel que soit
+    le niveau de zoom.
+  </p>
+
+  <form hx-get="/places/search" hx-target="#place-results" hx-swap="innerHTML" class="search-form">
+    <input type="text" name="q" placeholder="Nom de lieu…" autocomplete="off" required>
+    <button type="submit">Rechercher</button>
+  </form>
+  <div id="place-results"></div>
+
+  <h3>Villes ajoutées</h3>
+  <div id="place-list">
+    {% include "_place_list.html" %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>3. Réglages</h2>
   <form hx-post="/render" hx-target="#preview" hx-swap="innerHTML" hx-indicator="#rendering">
     <div class="field">
       <label for="theme">Thème</label>

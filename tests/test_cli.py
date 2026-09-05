@@ -114,6 +114,47 @@ def test_trace_color_option_overrides_theme_palette(gpx_file, tmp_path):
     assert 'fill="#14171a"' in svg  # fond du thème dark, inchangé
 
 
+def test_label_option_adds_a_city_regardless_of_zoom_tier(gpx_file, tmp_path):
+    out = tmp_path / "o"
+    result = runner.invoke(
+        app,
+        [
+            "render", str(gpx_file), "--basemap", "off",
+            "--label", "MonHameau:3.04,44.03", "--out-dir", str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    svg = next(out.glob("*.svg")).read_text(encoding="utf-8")
+    assert "MonHameau" in svg
+
+
+def test_label_option_is_repeatable(gpx_file, tmp_path):
+    out = tmp_path / "o"
+    result = runner.invoke(
+        app,
+        [
+            "render", str(gpx_file), "--basemap", "off",
+            "--label", "Un:3.02,44.01", "--label", "Deux:3.05,44.04",
+            "--out-dir", str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    svg = next(out.glob("*.svg")).read_text(encoding="utf-8")
+    assert "Un" in svg
+    assert "Deux" in svg
+
+
+def test_label_option_rejects_malformed_value(gpx_file, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "render", str(gpx_file), "--label", "PasDeCoordonnées",
+            "--out-dir", str(tmp_path / "o"),
+        ],
+    )
+    assert result.exit_code != 0
+
+
 def test_version():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0

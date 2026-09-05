@@ -33,6 +33,15 @@
 </div>
 {% endif %}
 
+{% if result.dropped_labels %}
+<div class="notice">
+  <p>
+    Hors du cadre de la carte, non affichée(s) :
+    {{ result.dropped_labels|join(", ") }}
+  </p>
+</div>
+{% endif %}
+
 <div class="downloads">
   <a href="/artifact/{{ token }}.svg" download="{{ slug }}.svg">Télécharger le SVG</a>
   <span class="png-downloads">

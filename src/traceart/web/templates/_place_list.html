@@ -1,0 +1,15 @@
+{% if place_list %}
+<ul class="place-list">
+  {% for p in place_list %}
+  <li>
+    <span>{{ p.name }}</span>
+    <form hx-post="/places/remove" hx-target="#place-list" hx-swap="innerHTML">
+      <input type="hidden" name="name" value="{{ p.name }}">
+      <button type="submit" class="remove">Supprimer</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="hint">Aucune ville ajoutée.</p>
+{% endif %}
