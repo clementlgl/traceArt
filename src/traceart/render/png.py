@@ -38,8 +38,15 @@ def target_width_px(size: str, *, dpi: int, scale: float) -> int:
     return max(1, round(value / divisor * dpi))
 
 
-def svg_to_png(svg: str, out_path: Path, *, width_px: int) -> Path:
-    """Rasterise une chaîne SVG. Lève `PngUnavailable` si Cairo manque."""
+def svg_to_png_bytes(svg: str, *, width_px: int) -> bytes:
+    """Rasterise une chaîne SVG en mémoire. Lève `PngUnavailable` si Cairo
+    manque.
+
+    C'est la primitive : `svg_to_png` (écriture disque) et un futur appel
+    depuis l'interface web (réponse HTTP `image/png`, sans fichier
+    temporaire) s'appuient tous deux dessus. `write_to` omis fait rendre
+    `cairosvg.svg2png` des octets plutôt qu'écrire un fichier.
+    """
     try:
         import cairosvg
     except (ImportError, OSError) as exc:
@@ -48,10 +55,13 @@ def svg_to_png(svg: str, out_path: Path, *, width_px: int) -> Path:
             "(et libcairo2 côté système)"
         ) from exc
 
+    return cairosvg.svg2png(bytestring=svg.encode("utf-8"), output_width=width_px)
+
+
+def svg_to_png(svg: str, out_path: Path, *, width_px: int) -> Path:
+    """Rasterise une chaîne SVG vers un fichier. Lève `PngUnavailable` si
+    Cairo manque."""
+    data = svg_to_png_bytes(svg, width_px=width_px)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2png(
-        bytestring=svg.encode("utf-8"),
-        write_to=str(out_path),
-        output_width=width_px,
-    )
+    out_path.write_bytes(data)
     return out_path

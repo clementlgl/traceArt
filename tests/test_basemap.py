@@ -589,8 +589,14 @@ def test_all_layers_missing_falls_back_to_the_bare_trace(gpx_over_fixture, tmp_p
         [gpx_over_fixture],
         Options(cache_dir=tmp_path / "vide", use_osm=False, layers=("water", "roads")),
     )
-    assert result.tier is None
     assert "rien en cache" in result.basemap_note
+    # Rien n'a été dessiné (aucun fond), donc aucune provenance à
+    # afficher — mais le palier reste connu : un appelant qui veut
+    # proposer un téléchargement doit savoir quelle résolution demander.
+    assert result.basemap_source is None
+    assert result.tier is not None
+    assert result.tier.scale == "10m"
+    assert set(result.basemap_missing) >= {"ne_10m_ocean", "ne_10m_roads"}
 
 
 # ------------------------------------------------ extraction vectorisée
@@ -704,3 +710,77 @@ def test_internal_boundaries_drawn_under_national_borders():
     from traceart.layers import LAYER_ORDER
 
     assert LAYER_ORDER.index("boundaries") < LAYER_ORDER.index("borders")
+
+
+# ------------------------------------------------ missing / source honnêtes
+
+
+def test_basemap_result_source_none_when_nothing_drawn(store, frame):
+    """Un `tier` connu ne suffit pas à conclure qu'un fond a été rendu :
+    il est conservé même sur repli total, pour qu'un appelant sache
+    quelle résolution proposer au téléchargement."""
+    from traceart.basemap.query import BasemapResult
+
+    empty = BasemapResult(layers={}, labels=[], tier=_tier("local"))
+    assert empty.source is None
+
+
+def test_basemap_result_source_present_when_labels_only(store, frame):
+    """Un fond qui ne pose que des labels (aucun chemin `layers`) doit
+    quand même annoncer sa provenance."""
+    from traceart.basemap.query import BasemapResult
+    from traceart.render.label import Label
+
+    with_labels_only = BasemapResult(
+        layers={}, labels=[Label(0.0, 0.0, "Test")], tier=_tier("local")
+    )
+    assert with_labels_only.source == "Natural Earth 10m"
+
+
+def test_result_exposes_basemap_missing(gpx_over_fixture, tmp_path):
+    from traceart.pipeline import Options, run
+
+    result = run(
+        [gpx_over_fixture],
+        Options(cache_dir=tmp_path / "vide", use_osm=False, layers=("water",)),
+    )
+    assert "ne_10m_ocean" in result.basemap_missing
+
+
+def test_basemap_missing_empty_when_cache_complete(store, gpx_over_fixture):
+    from traceart.pipeline import Options, run
+
+    result = run(
+        [gpx_over_fixture],
+        Options(cache_dir=store.root, use_osm=False, layers=("water",)),
+    )
+    assert result.basemap_missing == ()
+
+
+def test_basemap_missing_empty_when_basemap_off(gpx_over_fixture, tmp_path):
+    from traceart.pipeline import Options, run
+
+    result = run(
+        [gpx_over_fixture], Options(cache_dir=tmp_path / "vide", basemap="off")
+    )
+    assert result.basemap_missing == ()
+    assert result.tier is None
+
+
+def test_missing_data_error_carries_actionable_attributes(gpx_over_fixture, tmp_path):
+    from traceart.errors import MissingDataError
+    from traceart.pipeline import Options, run
+
+    with pytest.raises(MissingDataError) as exc:
+        run(
+            [gpx_over_fixture],
+            Options(
+                cache_dir=tmp_path / "vide",
+                use_osm=False,
+                basemap="on",
+                layers=("water",),
+            ),
+        )
+    assert exc.value.scale == "10m"
+    assert "ne_10m_ocean" in exc.value.datasets
+    assert exc.value.layers == ("water",)

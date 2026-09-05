@@ -135,6 +135,10 @@ class Result:
     tier: Tier | None = None
     basemap_note: str | None = None
     basemap_source: str | None = None
+    # Jeux Natural Earth absents du cache, quand c'est pour ça qu'une
+    # couche a été omise. Vide si tout était présent, ou si le fond a
+    # été désactivé par choix (`--basemap off`).
+    basemap_missing: tuple[str, ...] = ()
 
     @property
     def points_source(self) -> int:
@@ -219,9 +223,21 @@ def _order_chronologically(
     return [tracks[i] for i in order], [stats[i] for i in order]
 
 
-def _empty_basemap(note: str | None = None) -> BasemapResult:
-    """Fond vide, avec le message expliquant pourquoi le cas échéant."""
-    return BasemapResult(layers={}, labels=[], tier=None, note=note)
+def _empty_basemap(
+    note: str | None = None,
+    *,
+    tier: Tier | None = None,
+    missing: tuple[str, ...] = (),
+) -> BasemapResult:
+    """Fond vide, avec le message expliquant pourquoi le cas échéant.
+
+    `tier` reste `None` seulement quand le palier n'a jamais été calculé
+    (fond désactivé, ou aucune couche demandée) : dans tous les autres
+    cas de repli, l'appelant connaît déjà le palier et doit le
+    transmettre, sinon un futur bouton « télécharger » ne saurait pas
+    quelle résolution proposer.
+    """
+    return BasemapResult(layers={}, labels=[], tier=tier, note=note, missing=missing)
 
 
 def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult:
@@ -265,27 +281,28 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
             usable.append(layer)
 
     hint = f"`traceart data fetch --scale {tier.scale}`"
-    if absent:
-        # Nommer les jeux manquants : un cache rempli en 10m ne couvre
-        # pas une trace transcontinentale, qui demande du 110m.
-        names = tuple(sorted({d.name for d in absent}))
-        if opts.basemap == "on":
-            # MissingDataError plutôt qu'une simple PipelineError : un
-            # appelant (l'interface web, notamment) doit pouvoir répondre
-            # par une invitation à télécharger plutôt que par un message
-            # d'erreur de saisie — les attributs évitent d'avoir à
-            # reparser la phrase française.
-            raise MissingDataError(
-                f"couche(s) {', '.join(dropped)} : {', '.join(names)} absent(s) "
-                f"du cache — lance {hint}",
-                datasets=names,
-                scale=tier.scale,
-                layers=tuple(dropped),
-            )
+    # Nommer les jeux manquants dans tous les cas, pas seulement pour le
+    # message : un appelant qui veut proposer un téléchargement (le web,
+    # notamment) a besoin de la liste elle-même, pas d'une phrase à
+    # reparser.
+    missing_names = tuple(sorted({d.name for d in absent})) if absent else ()
+    if missing_names and opts.basemap == "on":
+        # MissingDataError plutôt qu'une simple PipelineError : un
+        # appelant doit pouvoir répondre par une invitation à télécharger
+        # plutôt que par un message d'erreur de saisie.
+        raise MissingDataError(
+            f"couche(s) {', '.join(dropped)} : {', '.join(missing_names)} absent(s) "
+            f"du cache — lance {hint}",
+            datasets=missing_names,
+            scale=tier.scale,
+            layers=tuple(dropped),
+        )
 
     if not usable:
         # Mode auto : on rend la trace seule plutôt que d'échouer.
-        return _empty_basemap(f"fond ignoré, rien en cache : {hint}")
+        return _empty_basemap(
+            f"fond ignoré, rien en cache : {hint}", tier=tier, missing=missing_names
+        )
 
     note = (
         f"couche(s) {', '.join(dropped)} ignorée(s), absentes du cache : {hint}"
@@ -301,7 +318,7 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
         tier=tier,
         osm_store=osm_store,
     )
-    return replace(result, note=note)
+    return replace(result, note=note, missing=missing_names)
 
 
 def run(paths: list[str | Path], options: Options | None = None) -> Result:
@@ -388,6 +405,7 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
         tier=basemap.tier,
         basemap_note=basemap.note,
         basemap_source=basemap.source,
+        basemap_missing=basemap.missing,
     )
 
 

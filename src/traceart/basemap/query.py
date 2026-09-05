@@ -87,11 +87,22 @@ class BasemapResult:
     # Ce qui a été laissé de côté, à remonter à l'utilisateur. Rempli par
     # l'appelant, qui seul sait ce qu'il a retiré de la demande.
     note: str | None = None
+    # Noms des jeux Natural Earth absents du cache, quand c'est la cause
+    # du retrait. Sans ça, un appelant qui veut proposer un téléchargement
+    # (l'interface web, par exemple) devrait analyser la phrase de `note`
+    # pour en extraire les noms de jeux — fragile et non contractuel.
+    missing: tuple[str, ...] = ()
 
     @property
     def source(self) -> str | None:
-        """Provenance lisible, pour le rapport CLI. None si aucun fond."""
-        if self.tier is None:
+        """Provenance lisible, pour le rapport CLI. None si aucun fond.
+
+        Le `tier` seul ne suffit pas à conclure qu'un fond a été dessiné :
+        il est désormais conservé même quand `missing_datasets` a tout
+        écarté (pour qu'un appelant sache quelle résolution proposer au
+        téléchargement), auquel cas `layers` et `labels` sont vides.
+        """
+        if self.tier is None or not (self.layers or self.labels):
             return None
         base = f"Natural Earth {self.tier.scale}"
         if not self.osm_layers:
