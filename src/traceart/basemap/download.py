@@ -12,6 +12,7 @@ import hashlib
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 
 from traceart.errors import UnavailableError
@@ -22,6 +23,37 @@ CHUNK = 1 << 16
 
 class DownloadError(UnavailableError):
     """Le téléchargement a échoué ; aucun fichier partiel n'est laissé."""
+
+
+@contextmanager
+def fetch_lock(cache_dir: Path):
+    """Verrou inter-processus autour d'une écriture du cache de fond.
+
+    `Store.fetch` réécrit `manifest.json` et déplace un fichier de mise
+    en scène vers `layers/` ; deux écritures concurrentes le
+    corrompraient. En un seul processus, `web/jobs.py` limite déjà à une
+    tâche à la fois — mais rien n'empêche par ailleurs le CLI de lancer
+    `data fetch` pendant qu'un serveur web tourne. Ce verrou couvre ce
+    cas-là, que le processus en mémoire ne peut pas voir.
+
+    `fcntl` est POSIX uniquement ; sur une plateforme qui ne l'a pas, on
+    se contente de ne pas verrouiller plutôt que de faire échouer l'appel
+    — la fonctionnalité reste utilisable, seule la garantie disparaît.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = cache_dir / ".fetch.lock"
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+
+    with lock_path.open("w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def download_to(

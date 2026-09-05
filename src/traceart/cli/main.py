@@ -36,7 +36,7 @@ from traceart.render.theme import available_themes, load_theme
 console = Console()
 err_console = Console(stderr=True)
 
-COMMANDS = {"render", "info", "themes", "version", "data"}
+COMMANDS = {"render", "info", "themes", "version", "data", "serve"}
 
 # Types d'arguments réutilisés : `path_type=Path` évite de reconvertir
 # des chaînes à la main dans chaque commande.
@@ -619,6 +619,44 @@ def osm_remove(name, cache_dir) -> None:
     if not store.remove(slug):
         raise OsmError(f"région inconnue : {slug}")
     console.print(f"[green]✓[/green] {slug} supprimé")
+
+
+@app.command()
+@click.option("--host", default="127.0.0.1", help="Adresse d'écoute.")
+@click.option("--port", type=int, default=8000, help="Port d'écoute.")
+@click.option(
+    "--cache-dir", type=PATH, help="Cache des données de fond (défaut : celui du CLI)."
+)
+def serve(host: str, port: int, cache_dir: Path | None) -> None:
+    """Lance l'interface web (FastAPI + HTMX).
+
+    Un seul worker, en dur : l'état (sessions d'upload, progression des
+    téléchargements) vit en mémoire, par processus — voir le README,
+    section Déploiement. `uvicorn` et `fastapi` sont importés ici, en
+    paresseux : le CLI ne doit pas en dépendre pour ses autres commandes.
+    """
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise TraceArtError(
+            "interface web indisponible : installe `traceart[web]`"
+        ) from exc
+
+    from traceart.web import create_app
+    from traceart.web.settings import WebSettings
+
+    settings = WebSettings.from_env()
+    if cache_dir is not None:
+        settings = WebSettings(
+            cache_dir=cache_dir,
+            work_dir=settings.work_dir,
+            max_upload_bytes=settings.max_upload_bytes,
+            session_ttl_s=settings.session_ttl_s,
+            allow_fetch=settings.allow_fetch,
+        )
+
+    console.print(f"[green]TraceArt[/green] sur http://{host}:{port}")
+    uvicorn.run(create_app(settings), host=host, port=port, workers=1)
 
 
 def main() -> None:

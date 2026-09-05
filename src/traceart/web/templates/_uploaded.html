@@ -1,0 +1,69 @@
+{% if files %}
+<p class="confirm">{{ files|length }} fichier(s) envoyé(s) : {{ files|join(", ") }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>2. Réglages</h2>
+  <form hx-post="/render" hx-target="#preview" hx-swap="innerHTML" hx-indicator="#rendering">
+    <div class="field">
+      <label for="theme">Thème</label>
+      <select name="theme" id="theme">
+        {% for t in themes %}
+        <option value="{{ t.name }}" {{ "selected" if t.name == "light" }}>{{ t.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="aspect">Format</label>
+      <select name="aspect" id="aspect">
+        {% for a in aspects %}
+        <option value="{{ a }}" {{ "selected" if a == "trace" }}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="basemap">Fond de carte</label>
+      <select name="basemap" id="basemap">
+        <option value="auto" selected>Automatique</option>
+        <option value="off">Aucun</option>
+      </select>
+    </div>
+
+    <fieldset class="field">
+      <legend>Couches</legend>
+      {% for layer in layers %}
+      <label class="checkbox">
+        <input type="checkbox" name="layers" value="{{ layer.name }}" {{ "checked" if layer.default }}>
+        {{ layer.label }}
+      </label>
+      {% endfor %}
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Annotations</legend>
+      <label class="checkbox">
+        <input type="checkbox" name="annotations" value="true"> Bandeau (titre, date, mesures)
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="profile" value="true"> Profil d'élévation
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="stats" value="true" checked> Mesures dans le bandeau
+      </label>
+    </fieldset>
+
+    <div class="field">
+      <label for="title">Titre</label>
+      <input type="text" name="title" id="title" placeholder="(déduit du fichier)">
+    </div>
+    <div class="field">
+      <label for="subtitle">Sous-titre</label>
+      <input type="text" name="subtitle" id="subtitle" placeholder="(déduit des dates)">
+    </div>
+
+    <button type="submit">Rendre</button>
+    <span id="rendering" class="htmx-indicator">rendu en cours…</span>
+  </form>
+</section>

@@ -1,0 +1,66 @@
+<h2>Données de fond</h2>
+
+<h3>Natural Earth ({{ "%.0f"|format(ne_size / 1e6) }} Mo)</h3>
+<table>
+  <thead><tr><th>couche</th><th>jeu</th><th>résolution</th><th>état</th></tr></thead>
+  <tbody>
+    {% for dataset, present, features in ne_status %}
+    <tr>
+      <td>{{ dataset.layer }}</td>
+      <td>{{ dataset.name }}</td>
+      <td>{{ dataset.scale }}</td>
+      <td>{{ "présent (" ~ features ~ ")" if present else "absent" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if allow_fetch %}
+<form hx-post="/data/fetch/natural-earth" hx-target="#job-area" hx-swap="innerHTML">
+  <label for="ne-scale">Résolution</label>
+  <select name="scale" id="ne-scale">
+    <option value="10m">10m (détaillé)</option>
+    <option value="50m">50m</option>
+    <option value="110m">110m (monde)</option>
+  </select>
+  <button type="submit">Télécharger</button>
+</form>
+{% else %}
+<p class="hint">Téléchargement désactivé sur ce serveur — utilise <code>traceart data fetch</code>.</p>
+{% endif %}
+
+<h3>Extraits OSM ({{ "%.0f"|format(osm_size / 1e6) }} Mo)</h3>
+{% if osm_regions %}
+<table>
+  <thead><tr><th>région</th><th>emprise</th><th>entités</th></tr></thead>
+  <tbody>
+    {% for region in osm_regions %}
+    <tr>
+      <td>{{ region.slug }}</td>
+      <td>{{ "%.2f"|format(region.bounds[0]) }}, {{ "%.2f"|format(region.bounds[1]) }} →
+          {{ "%.2f"|format(region.bounds[2]) }}, {{ "%.2f"|format(region.bounds[3]) }}</td>
+      <td>{{ region.features }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="hint">Aucun extrait importé.</p>
+{% endif %}
+
+{% if allow_fetch %}
+<form hx-post="/data/fetch/osm" hx-target="#job-area" hx-swap="innerHTML">
+  <label for="osm-region">Région Geofabrik</label>
+  <input type="text" name="region" id="osm-region" placeholder="europe/france/languedoc-roussillon" required>
+  <label class="checkbox">
+    <input type="checkbox" name="use_session_gpx" value="true" checked>
+    Restreindre à l'emprise du GPX en cours
+  </label>
+  <button type="submit">Télécharger et importer</button>
+  <p class="hint">Un import OSM peut prendre plusieurs dizaines de minutes.</p>
+</form>
+{% endif %}
+
+<div id="job-area"></div>
+
+<p><a href="/">← retour</a></p>

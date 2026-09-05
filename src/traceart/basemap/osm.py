@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-from traceart.basemap.download import DownloadError, download_to
+from traceart.basemap.download import DownloadError, download_to, fetch_lock
 from traceart.basemap.store import multi_geometry_type
 from traceart.errors import UnavailableError
 
@@ -479,41 +479,45 @@ class OsmStore:
             raise OsmError(f"extrait introuvable : {pbf}")
         slug = slug or slugify_region(pbf.name.removesuffix(".osm.pbf").removesuffix(".osm"))
 
-        counts: dict[str, int] = {}
-        shutil.rmtree(self.region_dir(slug), ignore_errors=True)
+        # Verrou inter-processus : un CLI et un serveur web partageant le
+        # même cache ne doivent jamais écrire les FlatGeobuf ou
+        # `index.json` en même temps.
+        with fetch_lock(self.root):
+            counts: dict[str, int] = {}
+            shutil.rmtree(self.region_dir(slug), ignore_errors=True)
 
-        for stage, handler in (
-            ("lines", self._import_lines),
-            ("multipolygons", self._import_multipolygons),
-            ("points", self._import_points),
-        ):
-            if on_progress:
-                on_progress(stage)
-            counts.update(handler(pbf, slug, bbox))
+            for stage, handler in (
+                ("lines", self._import_lines),
+                ("multipolygons", self._import_multipolygons),
+                ("points", self._import_points),
+            ):
+                if on_progress:
+                    on_progress(stage)
+                counts.update(handler(pbf, slug, bbox))
 
-        bounds = self._union_bounds(slug, counts)
-        if bbox is not None:
-            # Le filtre spatial de GDAL renvoie les entités qui
-            # *intersectent* l'emprise : une autoroute qui la traverse
-            # s'étend bien au-delà. Prendre l'union brute ferait croire à
-            # une couverture qui n'existe pas.
-            bounds = (
-                max(bounds[0], bbox[0]),
-                max(bounds[1], bbox[1]),
-                min(bounds[2], bbox[2]),
-                min(bounds[3], bbox[3]),
+            bounds = self._union_bounds(slug, counts)
+            if bbox is not None:
+                # Le filtre spatial de GDAL renvoie les entités qui
+                # *intersectent* l'emprise : une autoroute qui la
+                # traverse s'étend bien au-delà. Prendre l'union brute
+                # ferait croire à une couverture qui n'existe pas.
+                bounds = (
+                    max(bounds[0], bbox[0]),
+                    max(bounds[1], bbox[1]),
+                    min(bounds[2], bbox[2]),
+                    min(bounds[3], bbox[3]),
+                )
+            region = OsmRegion(
+                slug=slug,
+                source=str(pbf),
+                sha256=sha256,
+                bounds=bounds,
+                counts={k: v for k, v in counts.items() if v},
+                imported=datetime.now(UTC).isoformat(timespec="seconds"),
             )
-        region = OsmRegion(
-            slug=slug,
-            source=str(pbf),
-            sha256=sha256,
-            bounds=bounds,
-            counts={k: v for k, v in counts.items() if v},
-            imported=datetime.now(UTC).isoformat(timespec="seconds"),
-        )
-        regions = self.read_index()
-        regions[slug] = region
-        self.write_index(regions)
+            regions = self.read_index()
+            regions[slug] = region
+            self.write_index(regions)
         return region
 
     def _union_bounds(

@@ -13,6 +13,7 @@ uv run traceart themes                  # thèmes disponibles
 uv run traceart data status             # état du cache
 uv run traceart data osm fetch europe/france/auvergne   # Tier B, grand échelle
 uv run traceart data osm list           # extraits OSM importés
+uv run traceart serve                   # interface web, http://127.0.0.1:8000
 ```
 
 ## Pipeline
@@ -119,7 +120,11 @@ la trace seule sinon ; `--basemap on` exige les données ; `off` les ignore.
 | `basemap/osmconf.ini` | config du pilote OSM de GDAL |
 | `pipeline.py` | chaîne complète, réutilisable comme lib |
 | `layers.py` | registre des couches : nom, ordre de dessin, libellé, défauts |
-| `cli/` | façade Click + `traceart.toml` |
+| `errors.py` | racine d'exceptions commune (`TraceArtError`) |
+| `options.py` | table de mapping config → `Options`, partagée CLI/web |
+| `config.py` | lecture `traceart.toml`, sans dépendance à Click ni FastAPI |
+| `cli/` | façade Click sur le cœur |
+| `web/` | façade FastAPI + HTMX sur le même cœur |
 
 ## Configuration
 
@@ -250,10 +255,70 @@ géographique. `--size` ne change que la taille déclarée du document
 PNG en option (`--png`, extra `traceart[png]`) : `--dpi` si `--size` est
 une taille physique, `--png-scale` si elle est en pixels.
 
+## Interface web
+
+```bash
+uv run traceart serve                        # http://127.0.0.1:8000
+uv run traceart serve --host 0.0.0.0 --port 9000
+```
+
+Extra `traceart[web]` (FastAPI, uvicorn, Jinja2, python-multipart —
+HTMX est vendoré dans `web/static/`, aucun CDN, licence 0BSD). Envoie un
+GPX, règle thème / couches de fond / annotations / profil / format, et
+récupère le SVG ou un PNG (1000, 2000 ou 4000 px) — sans ligne de
+commande.
+
+Volontairement hors du formulaire : tolérance Douglas-Peucker,
+projection, seuils de nettoyage — ils gardent leurs défauts, comme sur
+le CLI sans options. `--basemap on` n'est jamais proposé non plus : ce
+mode échoue net sur un cache incomplet, ce que l'interface ne doit
+jamais infliger à l'utilisateur ; le choix visible est
+« aucun / automatique ».
+
+**`/data`** liste l'état du cache et propose de télécharger les données
+manquantes (Natural Earth comme les extraits OSM), avec une barre de
+progression qui s'interroge elle-même (`hx-trigger="every 1s"`, sans
+WebSocket). Un garde-fou disque refuse un import OSM sous ~10 Go libres —
+le pilote GDAL construit un index de nœuds temporaire qui peut peser
+plusieurs Go.
+
+Le rendu (0,3 à 1,1 s selon le fond) reste synchrone dans la requête ;
+seuls les téléchargements (plusieurs minutes) passent par une tâche de
+fond. Les routes de rendu sont déclarées `def`, pas `async def` :
+Starlette les bascule dans son threadpool, ce qui laisse la boucle
+d'événements répondre aux polls de progression pendant qu'un rendu
+tourne.
+
+## Déploiement
+
+**Un seul worker.** `traceart serve` le code en dur, et `create_app`
+refuse de démarrer si `WEB_CONCURRENCY > 1` : les sessions d'upload et
+les tâches de téléchargement vivent en mémoire, par processus. Au-delà
+d'un worker, `POST /data/fetch/…` sur le worker A et `GET
+/data/jobs/{id}` round-robiné vers B/C/D donnent un 404 trois fois sur
+quatre — la barre de progression reste figée pour de bon, pas
+temporairement.
+
+Un verrou fichier (`cache_dir/.fetch.lock`) protège malgré tout le cache
+partagé lui-même : un CLI et un serveur web qui pointent vers le même
+`cache_dir` ne peuvent pas écrire `manifest.json` ou importer un extrait
+OSM en même temps, même sur des processus différents.
+
+Pour dépasser un worker : pré-remplir le cache au build de l'image
+(`traceart data fetch` + `traceart data osm fetch …`) et poser
+`TRACEART_WEB_ALLOW_FETCH=0` (403 sur les routes de téléchargement, avec
+la commande CLI à lancer soi-même à la place) ; ou remplacer
+`web/jobs.py` par une file externe — c'est un `Protocol`
+(`JobRunner`), pas une classe concrète imposée.
+
+Le chemin de rendu lui-même (`/`, `/upload`, `/render`,
+`/artifact/*`) ne garde aucun état partagé entre requêtes et passe à
+plusieurs workers sans changement.
+
 ## Tests
 
 ```bash
-uv run pytest        # 256 tests, sans réseau
+uv run pytest        # 318 tests, sans réseau
 uv run ruff check src tests
 ```
 
@@ -263,9 +328,18 @@ extraits `.osm` XML, que le pilote GDAL lit exactement comme un `.pbf`.
 Filtrage, découpe, reprojection, assemblage des relations et sélection de
 source sont donc couverts sans télécharger quoi que ce soit.
 
+Les tests web (`fastapi.testclient.TestClient`, aucun port ni
+navigateur) réutilisent ce même cache synthétique et un
+`InlineJobRunner` — un téléchargement de test s'exécute à l'appel, sans
+thread ni `time.sleep()`. `tests/test_invariants.py` verrouille la
+direction des dépendances par analyse AST (`core/` ignore `render/` et
+`basemap/`, `web/` ignore `cli/`) et la fermeture de la hiérarchie
+d'exceptions — vérifiées par sabotage contrôlé, pas seulement par
+lecture du code.
+
 ## Licence
 
-Le code est sous **MIT** — voir [LICENSE](LICENSE).
+Le code est sous **MIT** — voir [LICENSE](LICENSE). L'interface web vendore [HTMX](https://htmx.org/) (licence 0BSD, `web/static/htmx.min.js`).
 
 Les données de fond ont leurs propres licences, et elles ne se
 comportent pas pareil :

@@ -220,3 +220,60 @@ def frame():
     projected = project_track(TRACK, projector)
     layout = fit_layout(projected.bounds(), long_edge=1000.0, margin=56.0)
     return projector, layout
+
+
+# ------------------------------------------------------------------- web
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """La suite est hors-ligne par discipline depuis le premier jour ;
+    ce filet la rend hors-ligne par construction. Un test qui tenterait
+    malgré tout un téléchargement échoue net, plutôt que de dépendre
+    (lentement, silencieusement) d'un vrai réseau."""
+
+    def _forbidden(*_args, **_kwargs):
+        raise AssertionError("appel réseau tenté pendant les tests")
+
+    monkeypatch.setattr("traceart.basemap.download.download_to", _forbidden)
+
+
+@pytest.fixture
+def web_app(tmp_path, store):
+    """Application web sur le cache Natural Earth synthétique du fixture
+    `store`, avec un `InlineJobRunner` : les tests n'ont jamais besoin
+    d'attendre un thread réel."""
+    from traceart.web import create_app
+    from traceart.web.jobs import InlineJobRunner
+    from traceart.web.settings import WebSettings
+
+    settings = WebSettings(cache_dir=store.root, work_dir=tmp_path / "web-work")
+    return create_app(settings, jobs=InlineJobRunner())
+
+
+@pytest.fixture
+def client(web_app):
+    from fastapi.testclient import TestClient
+
+    return TestClient(web_app)
+
+
+@pytest.fixture
+def empty_store_app(tmp_path):
+    """Même application, mais sur un cache totalement vide — exerce le
+    bandeau « données manquantes »."""
+    from traceart.web import create_app
+    from traceart.web.jobs import InlineJobRunner
+    from traceart.web.settings import WebSettings
+
+    settings = WebSettings(
+        cache_dir=tmp_path / "cache-vide", work_dir=tmp_path / "web-work"
+    )
+    return create_app(settings, jobs=InlineJobRunner())
+
+
+@pytest.fixture
+def empty_client(empty_store_app):
+    from fastapi.testclient import TestClient
+
+    return TestClient(empty_store_app)

@@ -1,0 +1,22 @@
+<div
+  id="job-{{ job.id }}"
+  class="job job-{{ job.state }}"
+  {% if job.state in ("pending", "running") %}
+  hx-get="/data/jobs/{{ job.id }}"
+  hx-trigger="every 1s"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  {% if job.state == "done" %}
+    <p class="confirm">Terminé.</p>
+  {% elif job.state == "failed" %}
+    <p class="error">Échec : {{ job.error }}</p>
+  {% else %}
+    <p>
+      {% if job.progress >= 0 %}
+      <progress value="{{ job.progress }}" max="1"></progress>
+      {% endif %}
+      {{ job.message or "en cours…" }}
+    </p>
+  {% endif %}
+</div>

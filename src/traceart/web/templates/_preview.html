@@ -1,0 +1,44 @@
+<h2>{{ title }}</h2>
+
+<img
+  src="/artifact/{{ token }}.svg"
+  alt="Carte : {{ title }}"
+  class="preview-image"
+>
+
+<dl class="stats">
+  <dt>Distance</dt>
+  <dd>{{ "%.1f"|format(result.stats|sum(attribute="distance_km")) }} km</dd>
+  {% set ascent = result.stats|sum(attribute="ascent_m") %}
+  {% if ascent %}
+  <dt>Dénivelé +</dt>
+  <dd>{{ "%.0f"|format(ascent) }} m</dd>
+  {% endif %}
+  <dt>Points</dt>
+  <dd>{{ result.points_source }} → {{ result.points_rendered }}</dd>
+  <dt>Cadre</dt>
+  <dd>{{ "%.0f"|format(result.layout.width) }} × {{ "%.0f"|format(result.layout.height) }}</dd>
+  {% if result.basemap_source %}
+  <dt>Fond</dt>
+  <dd>{{ result.basemap_source }}</dd>
+  {% endif %}
+</dl>
+
+{% if result.basemap_note %}
+<div class="notice">
+  <p>{{ result.basemap_note }}</p>
+  {% if result.basemap_missing %}
+  <a href="/data" hx-boost="true">Télécharger les données de fond →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="downloads">
+  <a href="/artifact/{{ token }}.svg" download="{{ slug }}.svg">Télécharger le SVG</a>
+  <span class="png-downloads">
+    PNG :
+    <a href="/artifact/{{ token }}.png?width=1000" download="{{ slug }}-1000.png">1000px</a>
+    <a href="/artifact/{{ token }}.png?width=2000" download="{{ slug }}-2000.png">2000px</a>
+    <a href="/artifact/{{ token }}.png?width=4000" download="{{ slug }}-4000.png">4000px</a>
+  </span>
+</div>

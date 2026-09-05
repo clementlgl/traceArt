@@ -1,0 +1,6 @@
+<div class="notice error">
+  <p>{{ message }}</p>
+  {% if missing_data %}
+  <a href="/data" hx-boost="true">Voir les données de fond →</a>
+  {% endif %}
+</div>

@@ -784,3 +784,49 @@ def test_missing_data_error_carries_actionable_attributes(gpx_over_fixture, tmp_
     assert exc.value.scale == "10m"
     assert "ne_10m_ocean" in exc.value.datasets
     assert exc.value.layers == ("water",)
+
+
+# ------------------------------------------------------ verrou de cache
+
+
+def test_fetch_lock_serializes_concurrent_writers(tmp_path):
+    """Deux « processus » qui tentent d'écrire le cache en même temps ne
+    doivent jamais s'exécuter en même temps — c'est le cas CLI+web sur
+    le même cache que le verrou couvre, invisible à un `ThreadJobRunner`
+    mono-processus."""
+    import threading
+    import time
+
+    from traceart.basemap.download import fetch_lock
+
+    order: list[str] = []
+    barrier = threading.Barrier(2)
+
+    def worker(name: str) -> None:
+        barrier.wait()
+        with fetch_lock(tmp_path):
+            order.append(f"{name}-start")
+            time.sleep(0.05)
+            order.append(f"{name}-end")
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in ("a", "b")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5)
+
+    # Sérialisé : le premier "start" est immédiatement suivi de son
+    # propre "end", jamais entrelacé avec l'autre worker.
+    assert order[0].endswith("start")
+    assert order[1].endswith("end")
+    assert order[0][0] == order[1][0]
+
+
+def test_fetch_lock_creates_the_cache_dir(tmp_path):
+    from traceart.basemap.download import fetch_lock
+
+    target = tmp_path / "absent" / "cache"
+    with fetch_lock(target):
+        pass
+    assert target.is_dir()
+    assert (target / ".fetch.lock").is_file()

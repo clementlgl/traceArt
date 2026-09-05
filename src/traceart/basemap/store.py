@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from traceart.basemap.catalog import CATALOG, Dataset
-from traceart.basemap.download import DownloadError, download_to
+from traceart.basemap.download import DownloadError, download_to, fetch_lock
 from traceart.errors import UnavailableError
 
 MANIFEST_NAME = "manifest.json"
@@ -205,24 +205,29 @@ class Store:
         {"skip", "download", "done"} pour l'affichage CLI.
         """
         wanted = list(datasets) if datasets is not None else list(CATALOG)
-        entries = self.read_manifest()
 
-        for dataset in wanted:
-            if not force and self.has(dataset) and dataset.name in entries:
+        # Verrou inter-processus : rien n'empêche par ailleurs le CLI de
+        # lancer `data fetch` pendant qu'un serveur web fait la même
+        # chose sur le même cache.
+        with fetch_lock(self.root):
+            entries = self.read_manifest()
+
+            for dataset in wanted:
+                if not force and self.has(dataset) and dataset.name in entries:
+                    if on_progress:
+                        on_progress(dataset, "skip")
+                    continue
                 if on_progress:
-                    on_progress(dataset, "skip")
-                continue
-            if on_progress:
-                on_progress(dataset, "download")
-            zip_path, digest = self._download(dataset)
-            features = self._convert(dataset, zip_path)
-            entries[dataset.name] = Entry(
-                name=dataset.name, url=dataset.url, sha256=digest, features=features
-            )
-            if on_progress:
-                on_progress(dataset, "done")
+                    on_progress(dataset, "download")
+                zip_path, digest = self._download(dataset)
+                features = self._convert(dataset, zip_path)
+                entries[dataset.name] = Entry(
+                    name=dataset.name, url=dataset.url, sha256=digest, features=features
+                )
+                if on_progress:
+                    on_progress(dataset, "done")
 
-        self.write_manifest(entries)
+            self.write_manifest(entries)
         return entries
 
     def status(self) -> list[tuple[Dataset, bool, int]]:
