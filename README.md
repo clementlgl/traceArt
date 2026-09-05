@@ -211,7 +211,13 @@ Natural Earth grossier. `--no-osm` force Natural Earth.
 Aucun extrait ne couvre l'emprise à un palier où OSM s'appliquerait ?
 Le rendu se replie sur Natural Earth sans échouer (`Result.osm_missing`),
 et le CLI comme l'interface web le signalent — `traceart data osm fetch
-<région Geofabrik>`, ou le bouton dédié sur `/data`.
+<région Geofabrik>`, ou sur l'aperçu web, le bouton « Télécharger
+l'extrait OSM pour cette carte » (`POST /data/fetch/osm/auto`) : il
+résout tout seul la région Geofabrik qui couvre le GPX de la session via
+`OsmStore.covering_geofabrik_region` (emprise de chaque région du
+catalogue, la plus petite qui couvre entièrement gagne — même logique
+que pour un extrait déjà importé), sans que l'utilisateur ait à taper un
+chemin.
 
 **Notoriété synthétique.** À l'import, chaque entité reçoit un rang
 calqué sur le `scalerank` de Natural Earth — `motorway` 1, `primary` 4,
@@ -357,7 +363,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 367 tests, sans réseau
+uv run pytest        # 374 tests, sans réseau
 uv run ruff check src tests
 ```
 

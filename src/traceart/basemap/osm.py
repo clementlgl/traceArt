@@ -33,6 +33,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+import shapely
+import shapely.errors
+import shapely.geometry
 
 from traceart.basemap.download import DownloadError, download_to, fetch_lock
 from traceart.basemap.store import multi_geometry_type
@@ -44,15 +47,16 @@ CONFIG_FILE = Path(__file__).resolve().parent / "osmconf.ini"
 DOWNLOAD_TIMEOUT_S = 600
 
 # Catalogue des régions publié par Geofabrik : 555 entrées, chacune avec
-# son identifiant, son nom et l'URL de son `.osm.pbf`. La variante
-# `-nogeom` pèse 0,5 Mo au lieu de 3,8 : les polygones ne serviraient
-# qu'à une recherche spatiale, dont la résolution par nom n'a pas besoin.
-GEOFABRIK_CATALOG_URL = f"{GEOFABRIK_BASE}/index-v1-nogeom.json"
+# son identifiant, son nom, l'URL de son `.osm.pbf` et son emprise
+# (polygone complet — 3,6 Mo, contre 0,5 pour la variante `-nogeom` sans
+# géométrie). L'emprise sert à proposer automatiquement la région qui
+# couvre une carte donnée, pas seulement à résoudre un nom tapé à la main.
+GEOFABRIK_CATALOG_URL = f"{GEOFABRIK_BASE}/index-v1.json"
 # Nom distinct de `INDEX_NAME`, qui désigne l'index des extraits déjà
 # importés localement — les deux vivent dans le même dossier.
 CATALOG_NAME = "geofabrik-catalog.json"
 # Le catalogue ne bouge qu'à la création ou la fusion d'une région :
-# inutile de retélécharger 0,5 Mo à chaque import.
+# inutile de retélécharger 3,6 Mo à chaque import.
 CATALOG_MAX_AGE_S = 30 * 24 * 3600
 CATALOG_TIMEOUT_S = 30
 
@@ -221,10 +225,15 @@ class GeofabrikRegion:
     name: str
     parent: str | None
     pbf: str
+    # Emprise (min_lon, min_lat, max_lon, max_lat) du polygone Geofabrik,
+    # ou `None` quand la géométrie manque ou n'a pas pu être lue —
+    # n'empêche pas la résolution par nom, seulement la suggestion
+    # automatique par emprise.
+    bounds: tuple[float, float, float, float] | None = None
 
 
 def parse_catalog(payload: dict) -> dict[str, GeofabrikRegion]:
-    """`index-v1-nogeom.json` → régions indexées par identifiant.
+    """`index-v1.json` → régions indexées par identifiant.
 
     Les entrées sans URL `pbf` (Geofabrik en publie quelques-unes en
     shapefile seul) sont écartées : proposer une région qu'on ne saurait
@@ -238,13 +247,36 @@ def parse_catalog(payload: dict) -> dict[str, GeofabrikRegion]:
         if not region_id or not pbf:
             continue
         parent = props.get("parent")
+        bounds = None
+        geometry = feature.get("geometry")
+        if geometry:
+            try:
+                bounds = tuple(float(v) for v in shapely.geometry.shape(geometry).bounds)
+            except (ValueError, TypeError, shapely.errors.ShapelyError):
+                bounds = None
         out[region_id] = GeofabrikRegion(
             id=region_id,
             name=str(props.get("name") or region_id),
             parent=str(parent) if parent else None,
             pbf=pbf,
+            bounds=bounds,
         )
     return out
+
+
+def _bbox_contains(
+    outer: tuple[float, float, float, float], inner: tuple[float, float, float, float]
+) -> bool:
+    return (
+        outer[0] <= inner[0]
+        and outer[1] <= inner[1]
+        and outer[2] >= inner[2]
+        and outer[3] >= inner[3]
+    )
+
+
+def _bbox_area(box: tuple[float, float, float, float]) -> float:
+    return (box[2] - box[0]) * (box[3] - box[1])
 
 
 def _parse_population(values: np.ndarray, places: np.ndarray) -> np.ndarray:
@@ -483,6 +515,25 @@ class OsmStore:
         near = difflib.get_close_matches(key, sorted(by_id), n=5)
         hint = f" — proches : {', '.join(near)}" if near else ""
         raise OsmError(f"région Geofabrik inconnue : {region!r}{hint}")
+
+    def covering_geofabrik_region(
+        self, bbox: tuple[float, float, float, float]
+    ) -> GeofabrikRegion | None:
+        """La plus petite région du catalogue Geofabrik qui couvre `bbox`.
+
+        Même logique que `covering()` sur les extraits déjà importés :
+        inclusion totale de l'emprise demandée, la plus petite région
+        gagne à couverture égale (import plus léger, plus rapide). Sur
+        l'emprise, pas la géométrie réelle — un polygone très découpé
+        (littoral, île) pourrait faire proposer une région un peu plus
+        grande que nécessaire, mais un extrait trop large n'est jamais
+        faux, seulement plus lourd à importer.
+        """
+        regions = self.catalog()
+        candidates = [r for r in regions.values() if r.bounds and _bbox_contains(r.bounds, bbox)]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda r: _bbox_area(r.bounds))
 
     def download(self, region_path: str, *, on_progress=None) -> tuple[Path, str]:
         """Télécharge un extrait Geofabrik. Renvoie (chemin, sha256)."""

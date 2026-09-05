@@ -39,7 +39,15 @@
     Aucun extrait OpenStreetMap ne couvre cette zone — le fond utilise
     Natural Earth, moins détaillé à cette échelle.
   </p>
-  <a href="/data" hx-boost="true">Télécharger un extrait OSM →</a>
+  <form
+    hx-post="/data/fetch/osm/auto"
+    hx-target="#osm-auto-job"
+    hx-swap="innerHTML"
+  >
+    <button type="submit">Télécharger l'extrait OSM pour cette carte</button>
+  </form>
+  <div id="osm-auto-job"></div>
+  <a href="/data" hx-boost="true">Ou choisir une région manuellement →</a>
 </div>
 {% endif %}
 

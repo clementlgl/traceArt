@@ -227,6 +227,7 @@ def test_render_proposes_osm_download_when_no_extract_covers_the_frame(client):
     assert r.status_code == 200
     assert "extrait OpenStreetMap" in r.text
     assert 'href="/data"' in r.text
+    assert 'hx-post="/data/fetch/osm/auto"' in r.text
 
 
 def test_render_reports_missing_data_on_empty_cache(empty_client):

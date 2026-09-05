@@ -101,13 +101,27 @@ def fetch_natural_earth(request: Request, scale: str = Form("10m")) -> Response:
     return _job_fragment(request, job)
 
 
-@router.post("/fetch/osm", response_class=HTMLResponse)
-def fetch_osm(
+def _session_bbox(
+    settings: WebSettings, request: Request
+) -> tuple[float, float, float, float] | None:
+    session_id = request.cookies.get("traceart_session")
+    directory = session_dir(settings.work_dir, session_id) if session_id else None
+    if not directory or not directory.is_dir():
+        return None
+    gpx_paths = collect_gpx([directory])
+    if not gpx_paths:
+        return None
+    tracks = parse_many([str(p) for p in gpx_paths])
+    return OsmStore.bbox_around(combined_bounds(tracks))
+
+
+def _submit_osm_fetch(
     request: Request,
-    region: str = Form(...),
-    use_session_gpx: bool = Form(False),
+    settings: WebSettings,
+    *,
+    region: str,
+    bbox: tuple[float, float, float, float] | None,
 ) -> Response:
-    settings = _settings(request)
     if not settings.allow_fetch:
         raise UserError(
             "téléchargement désactivé sur ce serveur — "
@@ -122,15 +136,6 @@ def fetch_osm(
             f"{_MIN_FREE_BYTES_FOR_OSM / 1e9:.0f} Go requis) pour importer un "
             "extrait OSM — l'import construit un index temporaire volumineux"
         )
-
-    bbox = None
-    if use_session_gpx:
-        session_id = request.cookies.get("traceart_session")
-        directory = session_dir(settings.work_dir, session_id) if session_id else None
-        if directory and directory.is_dir():
-            gpx_paths = collect_gpx([directory])
-            tracks = parse_many([str(p) for p in gpx_paths])
-            bbox = OsmStore.bbox_around(combined_bounds(tracks))
 
     def work(report: Report) -> None:
         store = OsmStore(settings.cache_dir)
@@ -165,6 +170,37 @@ def fetch_osm(
     except JobBusyError as exc:
         return _job_fragment(request, exc.current)
     return _job_fragment(request, job)
+
+
+@router.post("/fetch/osm", response_class=HTMLResponse)
+def fetch_osm(
+    request: Request,
+    region: str = Form(...),
+    use_session_gpx: bool = Form(False),
+) -> Response:
+    settings = _settings(request)
+    bbox = _session_bbox(settings, request) if use_session_gpx else None
+    return _submit_osm_fetch(request, settings, region=region, bbox=bbox)
+
+
+@router.post("/fetch/osm/auto", response_class=HTMLResponse)
+def fetch_osm_auto(request: Request) -> Response:
+    """Résout puis télécharge la région Geofabrik qui couvre le GPX de la
+    session en cours — le bouton « télécharger l'extrait pour cette carte »
+    de l'aperçu, sans que l'utilisateur ait à connaître un chemin Geofabrik."""
+    settings = _settings(request)
+    bbox = _session_bbox(settings, request)
+    if bbox is None:
+        raise UserError("aucun GPX pour cette session — envoie un fichier d'abord")
+
+    store = OsmStore(settings.cache_dir)
+    region = store.covering_geofabrik_region(bbox)
+    if region is None:
+        raise UserError(
+            "aucune région Geofabrik ne couvre cette emprise — "
+            "indique-en une manuellement sur /data"
+        )
+    return _submit_osm_fetch(request, settings, region=region.id, bbox=bbox)
 
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)

@@ -164,6 +164,21 @@ def test_geofabrik_url_from_region_path():
     assert already_full.endswith("auvergne-latest.osm.pbf")
 
 
+def _box_geometry(min_lon, min_lat, max_lon, max_lat):
+    return {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [min_lon, min_lat],
+                [max_lon, min_lat],
+                [max_lon, max_lat],
+                [min_lon, max_lat],
+                [min_lon, min_lat],
+            ]
+        ],
+    }
+
+
 CATALOG_PAYLOAD = {
     "type": "FeatureCollection",
     "features": [
@@ -175,7 +190,8 @@ CATALOG_PAYLOAD = {
                 "urls": {
                     "pbf": "https://download.geofabrik.de/europe/france/auvergne-latest.osm.pbf"
                 },
-            }
+            },
+            "geometry": _box_geometry(2.0, 44.9, 4.3, 46.9),
         },
         {
             "properties": {
@@ -185,7 +201,19 @@ CATALOG_PAYLOAD = {
                 "urls": {
                     "pbf": "https://download.geofabrik.de/europe/france/rhone-alpes-latest.osm.pbf"
                 },
-            }
+            },
+            "geometry": _box_geometry(4.0, 44.6, 7.2, 46.5),
+        },
+        # Contient les deux ci-dessus : ne doit gagner que si aucune
+        # sous-région ne couvre seule l'emprise demandée.
+        {
+            "properties": {
+                "id": "france",
+                "parent": "europe",
+                "name": "France",
+                "urls": {"pbf": "https://download.geofabrik.de/europe/france-latest.osm.pbf"},
+            },
+            "geometry": _box_geometry(-5.0, 41.0, 9.7, 51.5),
         },
         # Publiée en shapefile seul : inutilisable, donc écartée.
         {
@@ -194,7 +222,8 @@ CATALOG_PAYLOAD = {
                 "parent": "france",
                 "name": "Sans PBF",
                 "urls": {"shp": "https://download.geofabrik.de/x-free.shp.zip"},
-            }
+            },
+            "geometry": _box_geometry(0.0, 0.0, 1.0, 1.0),
         },
     ],
 }
@@ -214,7 +243,30 @@ def catalog_store(tmp_path):
 
 def test_catalog_skips_regions_without_a_pbf(catalog_store):
     regions = catalog_store.catalog()
-    assert set(regions) == {"auvergne", "rhone-alpes"}
+    assert set(regions) == {"auvergne", "rhone-alpes", "france"}
+
+
+def test_catalog_parses_bounds_from_geometry(catalog_store):
+    regions = catalog_store.catalog()
+    assert regions["auvergne"].bounds == pytest.approx((2.0, 44.9, 4.3, 46.9))
+
+
+def test_covering_geofabrik_region_picks_the_smallest_match(catalog_store):
+    """L'emprise tombe dans Auvergne, Rhône-Alpes et France à la fois —
+    seule la plus petite qui couvre entièrement doit sortir."""
+    region = catalog_store.covering_geofabrik_region((2.5, 45.0, 3.5, 45.5))
+    assert region.id == "auvergne"
+
+
+def test_covering_geofabrik_region_falls_back_to_the_parent(catalog_store):
+    """À cheval entre Auvergne et Rhône-Alpes : aucune des deux ne couvre
+    seule, mais la France entière, oui."""
+    region = catalog_store.covering_geofabrik_region((3.0, 45.0, 5.0, 45.5))
+    assert region.id == "france"
+
+
+def test_covering_geofabrik_region_none_outside_any_bounds(catalog_store):
+    assert catalog_store.covering_geofabrik_region((100.0, 0.0, 101.0, 1.0)) is None
 
 
 def test_resolve_accepts_a_bare_region_name(catalog_store):
