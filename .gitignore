@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+out/
+.traceart-cache/
+
+# Données et spécification personnelles, hors du dépôt
+examples/
+PROMPT.md

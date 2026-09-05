@@ -1,0 +1,116 @@
+# Thème de référence. Tous les autres thèmes sont fusionnés par-dessus
+# celui-ci : ils ne redéfinissent que ce qui change.
+
+[meta]
+name = "light"
+label = "Clair"
+
+[page]
+background = "#faf8f3"
+long_edge = 1000.0        # grand côté du viewBox, en unités SVG
+margin = 56.0             # marge sur les quatre côtés
+annotation_band = 104.0   # hauteur réservée en pied pour les annotations
+
+[trace]
+# Palette utilisée dans l'ordre quand plusieurs GPX sont rendus ensemble.
+colors = ["#d9483b", "#2f6f8f", "#c98b2e", "#5d7f5a", "#8a5a8f"]
+width = 3.0
+opacity = 1.0
+cap = "round"
+join = "round"
+# Halo de la couleur de page sous la trace : la détache du fond de carte
+# sans avoir à éclaircir le fond.
+halo = 7.0
+halo_color = "auto"
+
+[trace.marker]
+start = true
+end = true
+radius = 5.0
+stroke = "auto"
+stroke_width = 2.0
+
+[layers.water]
+fill = "#dde6ec"
+stroke = "none"
+width = 0.0
+opacity = 1.0
+
+[layers.coastline]
+stroke = "#53646d"
+fill = "none"
+width = 1.1
+opacity = 1.0
+
+[layers.rivers]
+stroke = "#9db6c4"
+fill = "none"
+width = 0.7
+opacity = 1.0
+
+[layers.roads]
+stroke = "#d3cabb"
+fill = "none"
+width = 0.55
+opacity = 1.0
+
+# Frontière nationale : elle structure la carte, donc trait affirmé et
+# tirets longs.
+[layers.borders]
+stroke = "#8f8474"
+fill = "none"
+width = 1.0
+dash = "9 4"
+opacity = 1.0
+
+# Limite administrative interne : elle situe sans hiérarchiser, donc
+# trait fin et tirets courts, nettement en retrait de la frontière.
+[layers.boundaries]
+stroke = "#cdc4b6"
+fill = "none"
+width = 0.5
+dash = "2 4"
+opacity = 1.0
+
+[layers.countries]
+# Convention cartographique : capitales largement espacées, discrètes,
+# sans point de localisation — un pays n'est pas un point.
+color = "#a99f8f"
+size = 17.0
+weight = 400
+letter_spacing = 6.0
+uppercase = true
+dot_radius = 0.0
+halo = 3.4
+
+[layers.labels]
+color = "#7a7367"
+size = 11.0
+weight = 400
+letter_spacing = 1.2
+dot_radius = 1.6
+halo = 2.6              # cerne le texte pour qu'il reste lisible sur la trace
+
+[typography]
+family = "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+color = "#26262a"
+muted = "#8b8478"
+title_size = 42.0
+title_weight = 600
+title_letter_spacing = 1.5
+subtitle_size = 15.0
+stat_value_size = 17.0
+stat_label_size = 9.5
+stat_label_letter_spacing = 1.8
+
+[profile]
+enabled = true
+height = 58.0
+stroke = "#d9483b"
+fill = "#efe8db"
+width = 1.4
+baseline = "#cfc6b6"
+
+[rule]
+color = "#d8d0c2"
+width = 0.8

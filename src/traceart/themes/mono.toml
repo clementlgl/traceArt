@@ -1,0 +1,57 @@
+# Tout en noir sur crème : la trace ne se distingue que par l'épaisseur.
+[meta]
+name = "mono"
+label = "Monochrome"
+
+[page]
+background = "#f4f1ea"
+
+[trace]
+colors = ["#141414"]
+width = 3.4
+halo = 8.0
+
+[trace.marker]
+radius = 4.5
+
+[layers.water]
+fill = "#e6e2d9"
+
+[layers.coastline]
+stroke = "#141414"
+width = 0.9
+
+[layers.rivers]
+stroke = "#8d8880"
+width = 0.6
+
+[layers.roads]
+stroke = "#c6c0b5"
+width = 0.5
+
+[layers.borders]
+stroke = "#6f6a62"
+
+[layers.boundaries]
+stroke = "#b8b2a8"
+dash = "2 4"
+
+[layers.countries]
+color = "#9d968c"
+
+[layers.labels]
+color = "#141414"
+
+[typography]
+color = "#141414"
+muted = "#6f6a62"
+title_weight = 500
+
+[profile]
+stroke = "#141414"
+fill = "#e6e2d9"
+baseline = "#b8b2a8"
+
+[rule]
+color = "#141414"
+width = 0.6

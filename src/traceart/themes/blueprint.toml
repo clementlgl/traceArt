@@ -1,0 +1,66 @@
+# Plan technique : traits cyan sur bleu de Prusse, tout en fines lignes.
+[meta]
+name = "blueprint"
+label = "Blueprint"
+
+[page]
+background = "#0f3057"
+
+[trace]
+colors = ["#f5f0e1", "#7fd4e8", "#f2c14e", "#9ad6a8", "#d79bd0"]
+width = 2.6
+halo = 6.0
+halo_color = "#0f3057"
+
+[trace.marker]
+radius = 4.0
+
+[layers.water]
+fill = "#0c2747"
+
+[layers.coastline]
+stroke = "#8fc6e0"
+width = 0.9
+
+[layers.rivers]
+stroke = "#4f8cb3"
+width = 0.6
+
+[layers.roads]
+stroke = "#2f5b85"
+width = 0.5
+
+[layers.borders]
+stroke = "#8fc6e0"
+width = 0.9
+dash = "10 4"
+
+[layers.boundaries]
+stroke = "#3f6a90"
+width = 0.5
+dash = "2 4"
+
+[layers.countries]
+color = "#5b8ab0"
+
+[layers.labels]
+color = "#a9cde2"
+letter_spacing = 2.0
+
+[typography]
+family = "'IBM Plex Mono', 'DejaVu Sans Mono', monospace"
+color = "#f5f0e1"
+muted = "#7fa8c4"
+title_size = 34.0
+title_weight = 400
+title_letter_spacing = 3.0
+stat_label_letter_spacing = 2.4
+
+[profile]
+stroke = "#7fd4e8"
+fill = "#0c2747"
+baseline = "#2f5b85"
+
+[rule]
+color = "#3a6a95"
+width = 0.5

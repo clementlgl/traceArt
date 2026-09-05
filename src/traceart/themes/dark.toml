@@ -1,0 +1,48 @@
+[meta]
+name = "dark"
+label = "Sombre"
+
+[page]
+background = "#14171a"
+
+[trace]
+colors = ["#ff6b57", "#4fb8d9", "#e8b34a", "#7fc08a", "#b98ac9"]
+width = 3.2
+halo = 7.4
+
+[layers.water]
+fill = "#1b2228"
+
+[layers.coastline]
+stroke = "#6f8996"
+width = 1.0
+
+[layers.rivers]
+stroke = "#3f6070"
+
+[layers.roads]
+stroke = "#332f2c"
+
+[layers.borders]
+stroke = "#5c646b"
+
+[layers.boundaries]
+stroke = "#31363a"
+
+[layers.countries]
+color = "#5f666c"
+
+[layers.labels]
+color = "#8c9298"
+
+[typography]
+color = "#eceae5"
+muted = "#767c82"
+
+[profile]
+stroke = "#ff6b57"
+fill = "#1c2024"
+baseline = "#3a3f44"
+
+[rule]
+color = "#2c3237"

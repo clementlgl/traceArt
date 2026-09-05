@@ -1,0 +1,28 @@
+# Copier en `traceart.toml` à la racine du projet, ou dans
+# ~/.config/traceart/config.toml pour des préférences globales.
+# Précédence : options CLI > ce fichier > défauts du code.
+
+[defaults]
+theme = "mono"          # light | dark | mono | blueprint | chemin/vers.toml
+projection = "auto"     # auto (Lambert conforme) | webmercator | utm | EPSG:2154
+tolerance = 0.25        # Douglas-Peucker, en unités de viewBox (grand côté 1000)
+aspect = "trace"        # trace | a4 | a3 | a2 | square | story | wide | 16:9 | 0.707
+size = "420mm"          # grand côté du document ; en mm/cm/in le PNG suit --dpi
+out_dir = "posters"
+basemap = "auto"        # auto (fond si cache rempli) | on (exige le cache) | off
+layers = ["water", "coastline", "rivers", "borders", "boundaries"]
+                        # + roads, countries, labels
+bleed = true            # fond à fond perdu, ou contenu dans les marges
+osm = true              # utiliser les extraits OSM importés (Tier B)
+dpi = 300               # PNG, si `size` est une taille physique
+png_scale = 2.0         # PNG, si `size` est en pixels
+
+[clean]
+enabled = true          # nettoyage aberrations / pauses / doublons
+max_speed_kmh = 300.0   # au-delà, le saut est jugé impossible (moto, train)
+pause_radius_m = 12.0   # rayon d'immobilité : feux rouges, arrêts
+
+[annotations]
+enabled = false         # bandeau titre + date + mesures (rien par défaut)
+stats = true            # distance, dénivelé +, durée — si enabled
+profile = false         # profil d'élévation, indépendant du bandeau
