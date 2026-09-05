@@ -14,11 +14,13 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
+from traceart.errors import UnavailableError
+
 USER_AGENT = "traceart/0.4 (+https://github.com/)"
 CHUNK = 1 << 16
 
 
-class DownloadError(RuntimeError):
+class DownloadError(UnavailableError):
     """Le téléchargement a échoué ; aucun fichier partiel n'est laissé."""
 
 

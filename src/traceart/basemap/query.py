@@ -22,6 +22,7 @@ from traceart.basemap.osm import OsmRegion, OsmStore, layer_by_name
 from traceart.basemap.store import Store, StoreError
 from traceart.basemap.tiers import Tier, choose_tier
 from traceart.core.project import Projector
+from traceart.errors import UnavailableError
 from traceart.render.label import COUNTRY, Label
 from traceart.render.layout import Layout
 
@@ -70,7 +71,7 @@ _GEOM_COLLECTION = 7
 _MIN_COUNTRY_SHARE = 0.03
 
 
-class BasemapError(RuntimeError):
+class BasemapError(UnavailableError):
     """Couche demandée inconnue, ou cache incomplet."""
 
 

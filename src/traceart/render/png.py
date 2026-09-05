@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from traceart.errors import UnavailableError
+
 _UNIT_TO_INCH = {"px": None, "mm": 25.4, "cm": 2.54, "in": 1.0, "pt": 72.0}
 
 
-class PngUnavailable(RuntimeError):
+class PngUnavailable(UnavailableError):
     """cairosvg absent ou Cairo non installé sur le système."""
 
 

@@ -22,6 +22,7 @@ import numpy as np
 
 from traceart.basemap.catalog import CATALOG, Dataset
 from traceart.basemap.download import DownloadError, download_to
+from traceart.errors import UnavailableError
 
 MANIFEST_NAME = "manifest.json"
 
@@ -50,7 +51,7 @@ def multi_geometry_type(name: object) -> str:
 DOWNLOAD_TIMEOUT_S = 120
 
 
-class StoreError(RuntimeError):
+class StoreError(UnavailableError):
     """Cache inutilisable, ou données de fond absentes."""
 
 

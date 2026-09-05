@@ -19,6 +19,7 @@ import numpy as np
 from lxml import etree
 
 from traceart.core.model import Segment, Track
+from traceart.errors import UserError
 
 # Conteneurs dont la fin ferme le segment courant.
 _SEGMENT_TAGS = frozenset({"trkseg", "rte"})
@@ -28,7 +29,7 @@ _POINT_TAGS = frozenset({"trkpt", "rtept"})
 _PRUNE_TAGS = _SEGMENT_TAGS | {"trk", "metadata", "wpt"}
 
 
-class GpxError(ValueError):
+class GpxError(UserError):
     """Fichier GPX illisible ou sans aucun point de trace."""
 
 

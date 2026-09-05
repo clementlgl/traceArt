@@ -14,6 +14,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from traceart.errors import UserError
+
 CONFIG_NAME = "traceart.toml"
 USER_CONFIG = Path.home() / ".config" / "traceart" / "config.toml"
 
@@ -23,7 +25,7 @@ SECTIONS = ("defaults", "clean", "annotations")
 # Clés reconnues dans [annotations] : enabled (bandeau texte), stats, profile.
 
 
-class ConfigError(ValueError):
+class ConfigError(UserError):
     """Fichier de config introuvable ou invalide."""
 
 

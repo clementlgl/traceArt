@@ -277,10 +277,13 @@ def test_pipeline_auto_mode_skips_missing_cache(gpx_file, tmp_path):
 
 
 def test_pipeline_on_mode_demands_the_cache(gpx_file, tmp_path):
-    from traceart.pipeline import Options, PipelineError, run
+    from traceart.errors import MissingDataError
+    from traceart.pipeline import Options, run
 
-    with pytest.raises(PipelineError, match="ne_10m_ocean"):
+    with pytest.raises(MissingDataError, match="ne_10m_ocean") as exc:
         run([gpx_file], Options(basemap="on", cache_dir=tmp_path / "vide"))
+    assert "ne_10m_ocean" in exc.value.datasets
+    assert exc.value.scale == "10m"
 
 
 def test_pipeline_off_mode_needs_no_cache(gpx_file, tmp_path):
@@ -562,10 +565,11 @@ def test_complete_cache_reports_no_note(store, gpx_over_fixture):
 
 
 def test_on_mode_still_refuses_an_incomplete_cache(store, gpx_over_fixture):
-    from traceart.pipeline import Options, PipelineError, run
+    from traceart.errors import MissingDataError
+    from traceart.pipeline import Options, run
 
     _drop(store, "ne_10m_roads")
-    with pytest.raises(PipelineError, match="roads"):
+    with pytest.raises(MissingDataError, match="roads") as exc:
         run(
             [gpx_over_fixture],
             Options(
@@ -575,6 +579,7 @@ def test_on_mode_still_refuses_an_incomplete_cache(store, gpx_over_fixture):
                 layers=("water", "roads"),
             ),
         )
+    assert exc.value.layers == ("roads",)
 
 
 def test_all_layers_missing_falls_back_to_the_bare_trace(gpx_over_fixture, tmp_path):

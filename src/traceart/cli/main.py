@@ -20,7 +20,7 @@ from traceart.basemap.osm import OsmError, OsmStore, geofabrik_url, slugify_regi
 from traceart.basemap.store import Store, default_cache_dir
 from traceart.cli.config import find_config, load_config, resolve
 from traceart.core.clean import CleanConfig
-from traceart.core.gpx import GpxError
+from traceart.errors import TraceArtError
 from traceart.pipeline import (
     DEFAULT_TOLERANCE,
     Options,
@@ -31,8 +31,8 @@ from traceart.pipeline import (
     run,
     run_each,
 )
-from traceart.render.png import PngUnavailable, svg_to_png, target_width_px
-from traceart.render.theme import ThemeError, available_themes, load_theme
+from traceart.render.png import svg_to_png, target_width_px
+from traceart.render.theme import available_themes, load_theme
 
 console = Console()
 err_console = Console(stderr=True)
@@ -659,7 +659,12 @@ def main() -> None:
         sys.argv.insert(1, "render")
     try:
         app()
-    except (GpxError, PipelineError, ThemeError, PngUnavailable, OsmError, ValueError) as exc:
+    # TraceArtError couvre les neuf exceptions du projet (StoreError et
+    # BasemapError inclus : elles remontaient auparavant en traceback
+    # nue, faute de figurer dans un tuple énuméré à la main). ValueError
+    # reste en filet pour les erreurs encore levées brutes ailleurs dans
+    # la pile (ex. `parse_aspect`, `target_width_px`).
+    except (TraceArtError, ValueError) as exc:
         err_console.print(f"[red]erreur[/red] {exc}")
         raise SystemExit(1) from exc
 

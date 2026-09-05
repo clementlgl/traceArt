@@ -34,6 +34,7 @@ import numpy as np
 
 from traceart.basemap.download import DownloadError, download_to
 from traceart.basemap.store import multi_geometry_type
+from traceart.errors import UnavailableError
 
 GEOFABRIK_BASE = "https://download.geofabrik.de"
 INDEX_NAME = "index.json"
@@ -89,7 +90,7 @@ WATER_LANDUSE = ("reservoir", "basin")
 WATER_WATERWAY = ("riverbank",)
 
 
-class OsmError(RuntimeError):
+class OsmError(UnavailableError):
     """Extrait OSM illisible, ou région introuvable dans le cache."""
 
 

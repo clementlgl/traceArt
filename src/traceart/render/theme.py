@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from traceart.errors import UserError
 from traceart.layers import LAYER_LABELS, LAYER_ORDER
 
 __all__ = ["LABEL_STYLES", "LAYER_LABELS", "LAYER_ORDER", "Theme", "load_theme"]
@@ -28,7 +29,7 @@ LABEL_STYLES = {"city": "labels", "country": "countries"}
 
 
 
-class ThemeError(ValueError):
+class ThemeError(UserError):
     """Thème introuvable ou TOML invalide."""
 
 

@@ -28,6 +28,7 @@ from traceart.core.project import Projector, choose_projection
 from traceart.core.project import project_track as _project
 from traceart.core.simplify import simplify_track
 from traceart.core.stats import TrackStats, compute_stats
+from traceart.errors import MissingDataError, UserError
 from traceart.render.layout import Layout, combined_bounds, fit_layout, layout_track
 from traceart.render.svg import (
     Annotation,
@@ -59,7 +60,7 @@ ASPECT_PRESETS = {
 }
 
 
-class PipelineError(ValueError):
+class PipelineError(UserError):
     """Entrée inutilisable ou options incohérentes."""
 
 
@@ -254,11 +255,19 @@ def _build_basemap(opts: Options, layout, projector: Projector) -> BasemapResult
     if absent:
         # Nommer les jeux manquants : un cache rempli en 10m ne couvre
         # pas une trace transcontinentale, qui demande du 110m.
-        names = ", ".join(sorted({d.name for d in absent}))
+        names = tuple(sorted({d.name for d in absent}))
         if opts.basemap == "on":
-            raise PipelineError(
-                f"couche(s) {', '.join(dropped)} : {names} absent(s) du cache "
-                f"— lance {hint}"
+            # MissingDataError plutôt qu'une simple PipelineError : un
+            # appelant (l'interface web, notamment) doit pouvoir répondre
+            # par une invitation à télécharger plutôt que par un message
+            # d'erreur de saisie — les attributs évitent d'avoir à
+            # reparser la phrase française.
+            raise MissingDataError(
+                f"couche(s) {', '.join(dropped)} : {', '.join(names)} absent(s) "
+                f"du cache — lance {hint}",
+                datasets=names,
+                scale=tier.scale,
+                layers=tuple(dropped),
             )
 
     if not usable:
