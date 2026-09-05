@@ -4,7 +4,8 @@ version = "0.2.0"
 description = "Transforme un GPX en carte dessinee minimaliste (SVG/PNG)"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "lxml>=5.2",
     "numpy>=2.0",

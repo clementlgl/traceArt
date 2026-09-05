@@ -262,3 +262,34 @@ les noms et champs de Natural Earth ; ceux du Tier B écrivent des
 extraits `.osm` XML, que le pilote GDAL lit exactement comme un `.pbf`.
 Filtrage, découpe, reprojection, assemblage des relations et sélection de
 source sont donc couverts sans télécharger quoi que ce soit.
+
+## Licence
+
+Le code est sous **MIT** — voir [LICENSE](LICENSE).
+
+Les données de fond ont leurs propres licences, et elles ne se
+comportent pas pareil :
+
+| Source | Licence | Ce que ça implique pour tes cartes |
+|---|---|---|
+| [Natural Earth](https://www.naturalearthdata.com/) | domaine public | rien, aucune attribution requise |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) | ODbL 1.0 | attribution obligatoire |
+
+Une carte produite à partir d'un extrait OSM est une *produced work* au
+sens de l'ODbL. Si tu la diffuses — poster imprimé, image partagée,
+publication — elle doit porter la mention :
+
+> © les contributeurs OpenStreetMap
+
+La clause de partage à l'identique de l'ODbL porte sur les *bases de
+données* dérivées, pas sur l'image : tu n'as pas à publier quoi que ce
+soit d'autre. En revanche, une carte rendue **sans** `--layers` OSM,
+c'est-à-dire sur Natural Earth seul, n'est soumise à aucune obligation.
+
+Le champ `fond` du rapport de rendu dit précisément d'où viennent les
+géométries :
+
+```
+fond   région · OSM alpes (water, rivers, roads, boundaries, labels) + Natural Earth 10m
+       └── attribution OSM requise
+```
