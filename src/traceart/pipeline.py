@@ -94,6 +94,10 @@ def parse_aspect(value: str | None) -> float | None:
 @dataclass(frozen=True, slots=True)
 class Options:
     theme: str = "light"
+    # Surcharge ponctuelle de la couleur de trace d'un thème par ailleurs
+    # inchangé (voir `Theme.with_trace_color`). None = couleur(s) du
+    # thème telles quelles.
+    trace_color: str | None = None
     projection: str = "auto"
     tolerance: float = DEFAULT_TOLERANCE
     margin: float | None = None
@@ -329,6 +333,8 @@ def run(paths: list[str | Path], options: Options | None = None) -> Result:
 
     tracks = parse_many(paths)
     theme = load_theme(opts.theme)
+    if opts.trace_color:
+        theme = theme.with_trace_color(opts.trace_color)
 
     reports: list[CleanReport] = []
     if opts.enable_clean:

@@ -37,6 +37,28 @@ def test_trace_color_cycles_through_palette():
     assert theme.trace_color(len(palette)) == palette[0]
 
 
+def test_with_trace_color_overrides_only_the_palette():
+    """Le reste du thème (fond, couches, typographie) doit rester
+    intact : c'est une surcharge ponctuelle, pas un nouveau thème."""
+    theme = load_theme("dark")
+    customized = theme.with_trace_color("#00ff00")
+
+    assert customized.trace_colors() == ["#00ff00"]
+    assert customized.trace_color(0) == "#00ff00"
+    assert customized.trace_color(7) == "#00ff00"  # boucle sur une palette à 1 élément
+
+    assert customized.color("page.background") == theme.color("page.background")
+    assert customized.layer("water") == theme.layer("water")
+    assert customized.label == theme.label
+
+
+def test_with_trace_color_does_not_mutate_the_original():
+    theme = load_theme("light")
+    original_colors = theme.trace_colors()
+    theme.with_trace_color("#123456")
+    assert theme.trace_colors() == original_colors
+
+
 def test_user_theme_file_merges_over_base(tmp_path):
     path = tmp_path / "custom.toml"
     path.write_text(

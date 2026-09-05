@@ -89,6 +89,19 @@ def test_all_themes_render(gpx_file):
         assert ElementTree.fromstring(result.svg) is not None
 
 
+def test_trace_color_override_reaches_the_svg(gpx_file):
+    result = run([gpx_file], Options(theme="dark", trace_color="#00ff00"))
+    assert 'stroke="#00ff00"' in result.svg
+    # Le reste du thème (fond) doit rester celui de "dark".
+    assert result.theme.color("page.background") == "#14171a"
+
+
+def test_no_trace_color_keeps_the_theme_palette(gpx_file):
+    plain = run([gpx_file], Options(theme="dark"))
+    overridden = run([gpx_file], Options(theme="dark", trace_color=None))
+    assert plain.theme.trace_colors() == overridden.theme.trace_colors()
+
+
 def test_multiple_files_share_one_frame(gpx_file, tmp_path):
     second = tmp_path / "second.gpx"
     second.write_text(gpx_file.read_text(encoding="utf-8"), encoding="utf-8")

@@ -129,6 +129,43 @@ def test_render_produces_a_preview_with_artifact_link(client):
     _artifact_token(r.text)
 
 
+def test_index_offers_a_trace_color_picker(client):
+    html = _upload(client).text
+    assert 'name="trace_color"' in html
+    assert 'type="color"' in html
+
+
+def test_render_with_custom_trace_color_reaches_the_artifact(client):
+    _upload(client)
+    r = client.post(
+        "/render",
+        data={
+            "theme": "dark",
+            "trace_color": "#00ff00",
+            "basemap": "off",
+            "aspect": "trace",
+        },
+    )
+    assert r.status_code == 200
+    token = _artifact_token(r.text)
+    svg = client.get(f"/artifact/{token}.svg").text
+    assert 'stroke="#00ff00"' in svg
+
+
+def test_render_without_trace_color_uses_the_theme_default(client):
+    _upload(client)
+    r = client.post(
+        "/render",
+        data={"theme": "dark", "basemap": "off", "aspect": "trace"},
+    )
+    assert r.status_code == 200
+    token = _artifact_token(r.text)
+    svg = client.get(f"/artifact/{token}.svg").text
+    from traceart.render.theme import load_theme
+
+    assert f'stroke="{load_theme("dark").trace_color(0)}"' in svg
+
+
 def test_render_honours_the_filename_derived_title(client):
     """Le test le plus précieux du lot : `Track.source.stem` alimente
     `default_title()`, un nom de fichier temporaire donnerait un titre

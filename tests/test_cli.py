@@ -99,6 +99,21 @@ def test_cli_option_overrides_config(gpx_file, tmp_path):
     assert "#f4f1ea" in next(out.glob("*.svg")).read_text(encoding="utf-8")
 
 
+def test_trace_color_option_overrides_theme_palette(gpx_file, tmp_path):
+    out = tmp_path / "o"
+    result = runner.invoke(
+        app,
+        [
+            "render", str(gpx_file), "--theme", "dark",
+            "--trace-color", "#00ff00", "--out-dir", str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    svg = next(out.glob("*.svg")).read_text(encoding="utf-8")
+    assert 'stroke="#00ff00"' in svg
+    assert 'fill="#14171a"' in svg  # fond du thème dark, inchangé
+
+
 def test_version():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0

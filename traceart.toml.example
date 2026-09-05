@@ -4,6 +4,7 @@
 
 [defaults]
 theme = "mono"          # light | dark | mono | blueprint | chemin/vers.toml
+trace_color = "#d9483b" # surcharge la couleur de trace du thème ; absente, garde celle(s) du thème
 projection = "auto"     # auto (Lambert conforme) | webmercator | utm | EPSG:2154
 tolerance = 0.25        # Douglas-Peucker, en unités de viewBox (grand côté 1000)
 aspect = "trace"        # trace | a4 | a3 | a2 | square | story | wide | 16:9 | 0.707

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import tomllib
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -102,6 +102,21 @@ class Theme:
         """Couleur de la n-ième trace, en boucle sur la palette."""
         colors = self.trace_colors()
         return colors[index % len(colors)]
+
+    def with_trace_color(self, color: str) -> Theme:
+        """Thème dérivé, palette de trace réduite à une seule couleur.
+
+        Sert la personnalisation utilisateur (l'interface web propose un
+        sélecteur de couleur) sans toucher au thème de base : toutes les
+        autres clés (fond, couches, typographie) restent celles du thème
+        choisi. Une seule couleur plutôt qu'une palette : c'est le cas
+        d'usage — « je veux MA trace dans telle couleur » — et plusieurs
+        traces rendues ensemble prendraient sinon toutes la même teinte,
+        ce qui reste le compromis attendu d'un réglage volontairement
+        simple.
+        """
+        merged = _deep_merge(self.data, {"trace": {"colors": [color]}})
+        return replace(self, data=merged)
 
 
 def available_themes() -> list[str]:

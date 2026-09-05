@@ -122,6 +122,7 @@ async def upload(request: Request, files: list[UploadFile]) -> Response:
 def render(
     request: Request,
     theme: str = Form("light"),
+    trace_color: str = Form(""),
     basemap: str = Form("auto"),
     aspect: str = Form(""),
     layers: list[str] = Form([]),
@@ -149,6 +150,7 @@ def render(
 
     overrides = {
         "theme": theme,
+        "trace_color": trace_color or None,
         "basemap": basemap,
         "aspect": aspect or None,
         "layers": ",".join(layers) if layers else "none",

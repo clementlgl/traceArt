@@ -98,6 +98,10 @@ ADAPTER_ONLY = frozenset({"clean", "title", "subtitle"})
 SPECS: tuple[OptionSpec, ...] = (
     OptionSpec("theme", "options", "defaults", "theme", "light", str,
                ui=True, label="Thème"),
+    # Pas de cast : une chaîne hexadécimale ou un nom de couleur CSS
+    # passent tels quels jusqu'à l'attribut `stroke=` du SVG.
+    OptionSpec("trace_color", "options", "defaults", "trace_color", None,
+               ui=True, label="Couleur de la trace"),
     OptionSpec("projection", "options", "defaults", "projection", "auto", str),
     OptionSpec("tolerance", "options", "defaults", "tolerance", DEFAULT_TOLERANCE, float),
     # Pas de cast : le CLI ne l'a jamais fait (le type Click --margin=float

@@ -264,9 +264,12 @@ uv run traceart serve --host 0.0.0.0 --port 9000
 
 Extra `traceart[web]` (FastAPI, uvicorn, Jinja2, python-multipart —
 HTMX est vendoré dans `web/static/`, aucun CDN, licence 0BSD). Envoie un
-GPX, règle thème / couches de fond / annotations / profil / format, et
-récupère le SVG ou un PNG (1000, 2000 ou 4000 px) — sans ligne de
-commande.
+GPX, règle thème / couleur de trace / couches de fond / annotations /
+profil / format, et récupère le SVG ou un PNG (1000, 2000 ou 4000 px) —
+sans ligne de commande. La couleur (`Theme.with_trace_color`, aussi
+`--trace-color` en CLI) surcharge uniquement la palette de trace d'un
+thème par ailleurs inchangé — fond, couches, typographie restent ceux du
+thème choisi.
 
 Volontairement hors du formulaire : tolérance Douglas-Peucker,
 projection, seuils de nettoyage — ils gardent leurs défauts, comme sur
@@ -318,7 +321,7 @@ plusieurs workers sans changement.
 ## Tests
 
 ```bash
-uv run pytest        # 318 tests, sans réseau
+uv run pytest        # 326 tests, sans réseau
 uv run ruff check src tests
 ```
 

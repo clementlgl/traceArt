@@ -122,6 +122,9 @@ def _write_outputs(
 @click.option("--out-dir", type=PATH, help="Dossier de sortie. Défaut : ./out")
 @click.option("--theme", help="Nom de thème livré ou chemin .toml.")
 @click.option(
+    "--trace-color", help="Surcharge la couleur de trace du thème (ex. #d9483b)."
+)
+@click.option(
     "--separate/--combine",
     default=False,
     help="Une image par GPX, ou tous dans un cadre.",
@@ -173,6 +176,7 @@ def render(
     out,
     out_dir,
     theme,
+    trace_color,
     separate,
     projection,
     tolerance,
@@ -207,6 +211,7 @@ def render(
     # dur ici, et qu'une interface web aurait dû dupliquer à l'identique.
     overrides = {
         "theme": theme,
+        "trace_color": trace_color,
         "projection": projection,
         "tolerance": tolerance,
         "margin": margin,

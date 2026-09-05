@@ -15,6 +15,18 @@
     </div>
 
     <div class="field">
+      <label class="checkbox">
+        <input
+          type="checkbox"
+          id="trace-color-toggle"
+          onchange="document.getElementById('trace_color').disabled = !this.checked"
+        >
+        Personnaliser la couleur de la trace
+      </label>
+      <input type="color" name="trace_color" id="trace_color" value="#d9483b" disabled>
+    </div>
+
+    <div class="field">
       <label for="aspect">Format</label>
       <select name="aspect" id="aspect">
         {% for a in aspects %}
